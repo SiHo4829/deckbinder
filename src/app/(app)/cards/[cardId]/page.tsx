@@ -56,9 +56,9 @@ export default async function CardDetailPage(props: PageProps<"/cards/[cardId]">
   const name = cardDisplayName(card);
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-8 py-2">
       <nav className="text-sm text-muted-foreground">
-        <Link href="/cards" className="hover:underline">
+        <Link href="/cards" className="underline-offset-4 hover:underline">
           카드 도감
         </Link>
       </nav>
@@ -66,16 +66,21 @@ export default async function CardDetailPage(props: PageProps<"/cards/[cardId]">
       <div className="grid gap-8 md:grid-cols-[280px_1fr]">
         <div className="flex flex-col gap-4">
           {/* 이미지가 없는 카드가 기본이라고 보고 그린다 (plan §4.4). */}
-          <div className="flex aspect-[63/88] items-center justify-center rounded-lg border bg-muted">
+          <div className="aspect-card overflow-hidden rounded-xl border bg-surface-raised shadow-sm">
             {card.image_url ? (
               // eslint-disable-next-line @next/next/no-img-element -- 원격 호스트 정책 미확정(§9.3)
               <img
                 src={card.image_url}
                 alt={name}
-                className="h-full w-full rounded-lg object-contain"
+                className="h-full w-full object-cover"
               />
             ) : (
-              <ImageOff className="size-8 text-muted-foreground/50" aria-hidden />
+              <div className="card-placeholder flex h-full w-full flex-col items-center justify-center gap-2">
+                <ImageOff className="size-7 text-muted-foreground/30" aria-hidden />
+                <span className="font-mono text-xs text-muted-foreground/60">
+                  {card.code}
+                </span>
+              </div>
             )}
           </div>
 
@@ -85,8 +90,17 @@ export default async function CardDetailPage(props: PageProps<"/cards/[cardId]">
 
         <div className="flex min-w-0 flex-col gap-6">
           <header>
-            <p className="font-mono text-xs text-muted-foreground">{card.code}</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">{name}</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-mono text-xs text-muted-foreground">{card.code}</p>
+              {card.rarity ? (
+                <span className="rounded border px-1.5 py-0.5 text-[10px] font-medium">
+                  {card.rarity}
+                </span>
+              ) : null}
+            </div>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-balance">
+              {name}
+            </h1>
             {card.name_ko && card.name_ko !== card.name_ja ? (
               <p className="mt-1 text-sm text-muted-foreground">{card.name_ja}</p>
             ) : null}

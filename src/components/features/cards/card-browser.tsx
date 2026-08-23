@@ -69,11 +69,13 @@ export function CardBrowser() {
   const cards = data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 py-2">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">카드 도감</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          한국어명이 없는 카드는 일본어명으로 표기합니다.
+        <p className="eyebrow">포켓몬 · 원피스</p>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight">카드 도감</h1>
+        <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
+          이름 · 효과 키워드 · 레어도로 카드를 찾습니다. 한국어명이 없는 카드는
+          일본어명으로 표기합니다.
         </p>
       </div>
 

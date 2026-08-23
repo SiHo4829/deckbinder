@@ -85,12 +85,15 @@ test.describe("뉴스", () => {
   test("마크다운이 HTML로 렌더된다", async ({ page }) => {
     await page.goto(`/news/${publishedSlug}`);
 
-    await expect(
-      page.getByRole("heading", { name: `소제목${stamp}`, level: 2 }),
-    ).toBeVisible();
-    await expect(page.getByRole("listitem")).toHaveCount(2);
+    // 푸터에도 목록이 있으므로 기사 본문으로 범위를 좁힌다.
+    const article = page.getByRole("article");
 
-    const external = page.getByRole("link", { name: "외부" });
+    await expect(
+      article.getByRole("heading", { name: `소제목${stamp}`, level: 2 }),
+    ).toBeVisible();
+    await expect(article.getByRole("listitem")).toHaveCount(2);
+
+    const external = article.getByRole("link", { name: "외부" });
     await expect(external).toHaveAttribute("target", "_blank");
     await expect(external).toHaveAttribute("rel", /noopener/);
   });

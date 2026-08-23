@@ -166,6 +166,34 @@ shadcn CLI 4.19에서 `-b/--base` 플래그의 의미가 **base color → primit
 | **`useSearchParams` + 정적 프리렌더** | Suspense 경계가 없으면 `next build`가 실패한다. **dev와 E2E는 통과**해서 빌드까지 돌리지 않으면 놓친다 | nuqs를 쓰는 컴포넌트를 `<Suspense>`로 감싼다 |
 
 
+### 2.8 비주얼 언어 (T1.10 확정)
+
+목표는 **"돈 내고 쓰는 서비스처럼 보이는 것"**이 아니라 **믿고 볼 수 있어 보이는 것**이다. 시세를 다루는 서비스라 화려함은 오히려 신뢰를 깎는다.
+
+**톤 — 조용한 아카이브/갤러리**
+
+카드 일러스트가 화면에서 유일하게 채도가 높은 요소다. UI는 무채색으로 물러선다. `globals.css`에 토큰 3개를 추가했다.
+
+| 토큰 | 용도 |
+|------|------|
+| `--surface` | 한 단계 눌린 바탕 (필터 패널 · 예고 섹션) |
+| `--surface-raised` | 카드 타일 바탕 — 이미지 로드 전 깜빡임을 막는다 |
+| `--hairline` | 구분선. `border`보다 옅게 |
+
+유틸리티 3개도 `@layer components`에 둔다.
+
+- `.aspect-card` — `63 / 88`. **실물 TCG 카드 비율**이다. 이미지 유무와 무관하게 그리드 높이가 흔들리지 않는다
+- `.card-placeholder` — 이미지 없는 카드의 격자 패턴. 빈칸 대신 `code`를 얹어 정보로 만든다
+- `.eyebrow` — 제목 위 소형 대문자 라벨. 페이지마다 위계의 첫 칸을 고정한다
+
+**규칙**
+
+1. **차트 금지** (CLAUDE.md). 기준가는 배지 하나. 산출 불가일 때도 배지 자리를 비우지 않고 "산출 불가"로 채워 *값이 없는 것*과 *기능이 없는 것*을 구분한다
+2. **레어도 배지는 `bg-foreground/85` + `text-background`**. 반투명 배경(`bg-background/85`)은 밝은 일러스트 위에서 읽히지 않는다
+3. **미완성 화면에 "준비 중"만 두지 않는다.** `ComingSoon`으로 무엇을 만들고 있는지 3개 항목으로 보이고, 지금 쓸 수 있는 곳(도감)으로 보낸다. 애드센스 심사가 보는 것이 이 화면들이다
+4. **호버는 그림자와 1.03 스케일까지.** 카드가 튀어오르면 목록을 훑기 어렵다
+5. 대체 카드는 **텍스트 목록이 아니라 썸네일**이다. 어느 일러스트인지가 선택 기준이기 때문이다
+
 ---
 
 ## 3. 전체 디렉토리 구조
@@ -298,10 +326,11 @@ src/components/
 │   ├── cards/
 │   │   ├── card-browser.tsx              # 필터+그리드 조립, URL 동기화 · 무한스크롤
 │   │   ├── card-grid.tsx
-│   │   ├── card-filter-panel.tsx         # 검색어 · 게임 · 종류 (나머지는 T1.7b)
-│   │   ├── card-detail.tsx               # (T1.8)
+│   │   ├── card-filter-panel.tsx         # 검색어 · 게임 · 패싯 셀렉트 · 키워드 칩
+│   │   ├── keyword-filter.tsx            # 효과 키워드 AND 조합 칩
+│   │   ├── card-detail.tsx
 │   │   ├── base-price-badge.tsx          # 기준가 1개만 표기 (차트 금지)
-│   │   ├── similar-cards.tsx             # 대체 카드 그룹
+│   │   ├── similar-cards.tsx             # 대체 카드 — 썸네일 그리드 (일러스트가 선택 기준)
 │   │   └── use-card-search.ts
 │   ├── decks/
 │   │   ├── deck-list.tsx  tier-table.tsx  deck-detail.tsx
@@ -324,23 +353,28 @@ src/components/
 │   │   └── share-binder-dialog.tsx
 │   └── news/
 │       ├── news-list.tsx
-│       └── news-article.tsx
+│       ├── news-article.tsx
+│       └── markdown.tsx                  # react-markdown 매핑 (raw HTML 미허용)
 ├── admin/
 │   ├── field.tsx                         # Field · TextInput · TextArea · NativeSelect · StatusMessage
 │   ├── use-admin-form.ts                 # 등록 폼 공통 제출·에러 처리
 │   ├── admin-login-form.tsx
 │   ├── set-form.tsx
-│   └── card-form.tsx
+│   ├── card-form.tsx
+│   ├── keyword-form.tsx
+│   └── news-form.tsx                     # 작성·수정 겸용 (method + resetOnSuccess)
 └── common/
     ├── header.tsx                        # 서버 컴포넌트. 내비 · 테마 토글 조립
     ├── main-nav.tsx                      # 데스크톱 내비 (client — usePathname)
     ├── mobile-nav.tsx                    # 모바일 시트 내비 (client)
-    ├── footer.tsx                        # 면책 조항 · 저작권
+    ├── footer.tsx                        # 4단 — 서비스/정보 내비 · 면책 · 정책 링크
     ├── theme-provider.tsx                # next-themes 래퍼 (client)
     ├── theme-toggle.tsx                  # 라이트 / 다크 전환 (client)
     ├── affiliate-carousel.tsx            # 하단 제휴 마케팅 캐러셀 (T3.6)
     ├── error-boundary.tsx                # 기능 단위 클라이언트 에러 경계
-    └── empty-state.tsx
+    ├── ad-slot.tsx                       # ADSENSE_CLIENT 없으면 null
+    ├── coming-soon.tsx                   # 미완성 화면을 "예고"로 보이게 (§2.8)
+    └── empty-state.tsx                   # icon · action 지원
 ```
 
 ### 3.3 src/lib — 로직
@@ -804,6 +838,15 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
   - **부수 수정**: `cookies()` 때문에 동적이던 `/cards/[cardId]`를 익명 클라이언트+`generateStaticParams`로 전환 → SSG
   - 검증: `test` 66건 ✅ / `test:e2e` 39건 ✅ / `build`에서 `/news` `○ 5m`, `/news/[slug]` `●`, `/cards/[cardId]` `●` 확인
 
+- [x] **T1.10** 비주얼 정리 — 상업 서비스 수준의 화면 (§2.8)
+  - 갤러리 톤 토큰 3개 + 유틸 3개 (`--surface` · `--surface-raised` · `--hairline` / `.aspect-card` · `.card-placeholder` · `.eyebrow`)
+  - 홈 전면 재작성 — 히어로(수치 포함) · 카드 쇼케이스 · 기능 3종 · **제품 원칙 2종** · 최신 소식
+  - 헤더 로고 락업(덱바인더/DECKBINDER) · 푸터 4단(서비스·정보 내비 + 정책 링크)
+  - 카드 그리드 재설계(실물 비율 · 이미지 없는 카드 처리 · 레어도 배지 대비) · 상세 위계 정리 · 대체 카드 썸네일화
+  - `/decks` · `/binder`를 `ComingSoon`으로 교체 — 빈 화면은 애드센스 심사에 불리하다
+  - 검증: `test` 66건 ✅ / `test:e2e` 39건 ✅ / `build` ✅ / 브라우저 라이트·다크 육안 확인
+  - **주의**: 푸터에 목록이 생겨 `getByRole("listitem")`이 전역에서 6개를 잡았다. 뉴스 마크다운 E2E는 `getByRole("article")`로 범위를 좁혔다
+
 **관리자 화면 후속** (T1.6-A에서 미포함)
 
 - [ ] 카드 수정 · 삭제 UI (API는 있음)
@@ -843,7 +886,7 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
 
 ## 9. 미해결 — 결정이 필요한 사항
 
-1. **애드센스 심사 제출 전 준비물** — ①실제 기사 5~10편 발행(코드가 아니라 콘텐츠 문제) ②`NEXT_PUBLIC_SITE_URL`을 실제 도메인으로 교체 ③`ads.txt` 배치와 퍼블리셔 ID 입력 ④EEA 트래픽이 있으면 인증 CMP 도입. 플레이스홀더 페이지(`/decks` `/binder`)가 "제작 중"으로 보이는 것도 반려 사유가 된다.
+1. **애드센스 심사 제출 전 준비물** — ①실제 기사 5~10편 발행(코드가 아니라 콘텐츠 문제) ②`NEXT_PUBLIC_SITE_URL`을 실제 도메인으로 교체 ③`ads.txt` 배치와 퍼블리셔 ID 입력 ④EEA 트래픽이 있으면 인증 CMP 도입. ~~플레이스홀더 페이지가 "제작 중"으로 보이는 것~~ → T1.10에서 `ComingSoon`으로 해소.
 2. **`CLAUDE.md`의 `similar_group_id` 지정** — 대체 카드 판정을 `base_code`로 바꿨으므로 `CLAUDE.md` 문구를 갱신할지, 아니면 `similar_group_id`를 별도 용도(다른 이름의 유사 효과 카드 수동 그룹)로 살릴지 정해야 한다 (§4.6).
 3. **관리자 토큰의 수명** — 지금은 토큰 1개가 곧 전체 쓰기 권한이다. 유출되면 카탈로그 전체를 조작할 수 있다. T3.1까지 이 상태를 유지할지, 더 일찍 계정 기반으로 옮길지.
 4. **일본 중고 매물 사이트 약관** (T2.7 선행) — 메르카리 · 라쿠마 · 야후옥션의 이용약관 검토 결과를 `docs/crawler-compliance.md`에 기록해야 한다. 차단 시 대체 전략(공식 API · 제휴)이 필요하다.
@@ -851,3 +894,4 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
 6. **비로그인 매물 검색 허용 여부** — 허용 시 IP 해시 쿼터만으로 방어해야 해 우회 여지가 커진다. 로그인 필수면 방어력은 오르나 초기 유입이 준다.
 7. **환율 갱신 주기** — 기준가 KRW 환산 스냅샷 주기(일 1회 권장).
 8. **Node 버전** — 현재 20.15.1로 테스트 툴체인 4개를 하향 고정한 상태다(§2.5). 22 LTS로 올리면 해소된다.
+9. **원격 DB의 샘플 데이터** — T1.10 디자인 확인용으로 `scripts/sample-data.ts`가 세트 2 · 카드 8 · 키워드 3 · 기사 3을 원격 DB에 넣었다. **카드명과 일러스트가 서로 맞지 않는 가짜 데이터**이므로 공개 전에 반드시 지워야 한다: `npx tsx --env-file=.env.local scripts/cleanup-sample.ts` (E2E가 남긴 `pub-*` · `draft-*` 기사도 같이 지운다).

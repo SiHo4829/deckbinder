@@ -154,3 +154,52 @@
   --color-game-opcg: var(--game-opcg);
   --color-game-opcg-foreground: var(--game-opcg-foreground);
 }
+
+/* ─────────────────────────────────────────────────────────────
+   갤러리 톤 — 카드 일러스트가 주인공이 되도록 배경은 가라앉힌다.
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  /* 카드가 놓이는 바닥. 배경보다 아주 살짝 눌러 카드를 띄운다. */
+  --surface: oklch(0.975 0 0);
+  --surface-raised: oklch(1 0 0);
+  /* 넓은 면에 쓰는 은은한 구분선. border보다 약하다. */
+  --hairline: oklch(0.93 0 0);
+}
+
+.dark {
+  --surface: oklch(0.16 0 0);
+  --surface-raised: oklch(0.205 0 0);
+  --hairline: oklch(0.26 0 0);
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-hairline: var(--hairline);
+}
+
+@layer components {
+  /* 카드 비율 63×88mm. 도감·상세·스켈레톤이 같은 값을 쓴다. */
+  .aspect-card {
+    aspect-ratio: 63 / 88;
+  }
+
+  /* 이미지 없는 카드 자리. 초라해 보이지 않게 미세한 격자를 깐다. */
+  .card-placeholder {
+    background-image:
+      linear-gradient(var(--hairline) 1px, transparent 1px),
+      linear-gradient(90deg, var(--hairline) 1px, transparent 1px);
+    background-size: 12px 12px;
+    background-position: center;
+  }
+
+  /* 섹션 상단 라벨 */
+  .eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+}

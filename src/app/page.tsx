@@ -1,33 +1,236 @@
+import {
+  ArrowRight,
+  BookOpen,
+  ImageOff,
+  Layers,
+  Search,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 import Link from "next/link";
 
-import { mainNav } from "@/lib/navigation";
+import { Button } from "@/components/ui/button";
+import { fetchCatalogStats, fetchShowcaseCards } from "@/lib/home/queries";
+import { fetchPublishedPosts } from "@/lib/news/queries";
+import { formatKoreanDate } from "@/lib/utils/date";
+import { cardDisplayName } from "@/types/card";
 
-// 홈 셸 — 메타 요약 · 신규 카드 · 뉴스 피드는 T1.7 이후 채운다.
-export default function HomePage() {
+export const revalidate = 600;
+
+const FEATURES = [
+  {
+    icon: BookOpen,
+    title: "카드 도감",
+    body: "속성 · 레어도 · 발매 팩에 더해 드로우 · 버림 · 카운터 같은 효과 키워드로 찾습니다. 여러 키워드를 고르면 모두 가진 카드만 남습니다.",
+    href: "/cards",
+    cta: "도감 둘러보기",
+  },
+  {
+    icon: Layers,
+    title: "덱 레시피 · 시뮬레이터",
+    body: "우승 덱과 메타 티어를 확인하고, 첫 손패를 실제로 뽑아 보며 덱 구성 확률을 확인합니다.",
+    href: "/decks",
+    cta: "덱 살펴보기",
+  },
+  {
+    icon: Search,
+    title: "일본 중고 매물 조회",
+    body: "메르카리 · 라쿠마 · 야후옥션의 실시간 매물을 한 번에. A급 · 미개봉 · PSA/BGS 등급 필터를 기본 제공합니다.",
+    href: "/cards",
+    cta: "카드 찾기",
+  },
+] as const;
+
+function ShowcaseTile({
+  card,
+  className,
+}: {
+  card: { id: string; image_url: string | null; name_ko: string | null; name_ja: string };
+  className?: string;
+}) {
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-16">
-      <section className="max-w-2xl">
-        <h1 className="text-3xl font-semibold tracking-tight text-balance">
-          수집과 플레이를 하나로
-        </h1>
-        <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-          덱바인더는 포켓몬 · 원피스 TCG 플레이어와 컬렉터를 위한 서포팅
-          플랫폼입니다. 카드 도감과 덱 시뮬레이터, 일본 중고 매물 조회, 디지털
-          바인더를 한곳에서 제공합니다.
-        </p>
+    <Link
+      href={`/cards/${card.id}`}
+      className={`group relative block aspect-card overflow-hidden rounded-lg border bg-surface-raised ${className ?? ""}`}
+    >
+      {card.image_url ? (
+        // eslint-disable-next-line @next/next/no-img-element -- 원격 호스트 정책 미확정(§9.3)
+        <img
+          src={card.image_url}
+          alt={cardDisplayName(card)}
+          loading="lazy"
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+      ) : (
+        <div className="card-placeholder flex h-full w-full items-center justify-center">
+          <ImageOff className="size-5 text-muted-foreground/30" aria-hidden />
+        </div>
+      )}
+    </Link>
+  );
+}
+
+export default async function HomePage() {
+  const [cards, stats, posts] = await Promise.all([
+    fetchShowcaseCards(10),
+    fetchCatalogStats(),
+    fetchPublishedPosts(3),
+  ]);
+
+  return (
+    <div className="flex flex-col">
+      {/* ── 히어로 ─────────────────────────────────────── */}
+      <section className="border-b bg-surface">
+        <div className="mx-auto grid w-full max-w-6xl gap-12 px-4 py-16 lg:grid-cols-[1.1fr_1fr] lg:items-center lg:py-24">
+          <div className="max-w-xl">
+            <p className="eyebrow">포켓몬 · 원피스 TCG</p>
+            <h1 className="mt-3 text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
+              수집과 플레이를 하나로
+            </h1>
+            <p className="mt-5 text-base leading-relaxed text-muted-foreground">
+              흩어진 카드 정보를 한곳에 모았습니다. 효과 키워드로 원하는 카드를 찾고,
+              덱을 짜고, 일본 중고 매물의 합리적인 가격을 확인하세요.
+            </p>
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Button asChild size="lg">
+                <Link href="/cards">
+                  카드 도감 열기
+                  <ArrowRight className="size-4" aria-hidden />
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="lg">
+                <Link href="/news">최신 소식</Link>
+              </Button>
+            </div>
+
+            {stats.cards > 0 ? (
+              <dl className="mt-10 flex gap-8 border-t pt-6">
+                <div>
+                  <dt className="text-xs text-muted-foreground">등록 카드</dt>
+                  <dd className="mt-1 text-2xl font-semibold tabular-nums">
+                    {stats.cards.toLocaleString("ko-KR")}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">발매 팩</dt>
+                  <dd className="mt-1 text-2xl font-semibold tabular-nums">
+                    {stats.sets.toLocaleString("ko-KR")}
+                  </dd>
+                </div>
+              </dl>
+            ) : null}
+          </div>
+
+          {/* 카드 일러스트가 주인공. 데이터가 없으면 이 영역을 감춘다. */}
+          {cards.length > 0 ? (
+            <div className="grid grid-cols-3 gap-3 sm:gap-4">
+              {cards.slice(0, 6).map((card, i) => (
+                <ShowcaseTile
+                  key={card.id}
+                  card={card}
+                  className={i % 3 === 1 ? "translate-y-6" : undefined}
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
       </section>
 
-      <nav className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {mainNav.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className="rounded-lg border p-4 transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
-            <span className="text-sm font-medium">{item.label}</span>
-          </Link>
-        ))}
-      </nav>
+      {/* ── 기능 ───────────────────────────────────────── */}
+      <section className="mx-auto w-full max-w-6xl px-4 py-16">
+        <div className="grid gap-6 md:grid-cols-3">
+          {FEATURES.map((f) => (
+            <article
+              key={f.title}
+              className="flex flex-col rounded-xl border bg-surface-raised p-6"
+            >
+              <f.icon className="size-5 text-muted-foreground" aria-hidden />
+              <h2 className="mt-4 text-base font-semibold tracking-tight">{f.title}</h2>
+              <p className="mt-2 flex-1 text-sm leading-relaxed text-muted-foreground">
+                {f.body}
+              </p>
+              <Link
+                href={f.href}
+                className="mt-5 inline-flex items-center gap-1 text-sm font-medium underline-offset-4 hover:underline"
+              >
+                {f.cta}
+                <ArrowRight className="size-3.5" aria-hidden />
+              </Link>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {/* ── 제품 원칙 ──────────────────────────────────── */}
+      <section className="border-y bg-surface">
+        <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-16 md:grid-cols-2">
+          <div className="flex gap-4">
+            <ShieldCheck className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
+            <div>
+              <h2 className="text-base font-semibold tracking-tight">
+                되팔이를 돕지 않습니다
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                매물 조회는 1회 1장으로 제한하고, 짧은 시간에 반복 조회할 수 없습니다.
+                대량 스캔과 매크로를 막기 위한 설계입니다.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-4">
+            <Sparkles className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
+            <div>
+              <h2 className="text-base font-semibold tracking-tight">
+                시세 그래프를 만들지 않습니다
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                등락률도 변동 차트도 없습니다. 지금 사면 얼마인지 알려주는 기준가
+                하나만 보여줍니다. 카드는 투자 상품이 아니니까요.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 최신 소식 ──────────────────────────────────── */}
+      {posts.length > 0 ? (
+        <section className="mx-auto w-full max-w-6xl px-4 py-16">
+          <div className="flex items-baseline justify-between gap-4">
+            <h2 className="text-lg font-semibold tracking-tight">최신 소식</h2>
+            <Link
+              href="/news"
+              className="text-sm text-muted-foreground underline-offset-4 hover:underline"
+            >
+              전체 보기
+            </Link>
+          </div>
+
+          <ul className="mt-6 grid gap-4 md:grid-cols-3">
+            {posts.map((post) => (
+              <li key={post.id}>
+                <Link
+                  href={`/news/${post.slug}`}
+                  className="flex h-full flex-col rounded-xl border bg-surface-raised p-5 transition-colors hover:bg-accent/40"
+                >
+                  <time
+                    dateTime={post.published_at}
+                    className="text-xs text-muted-foreground"
+                  >
+                    {formatKoreanDate(post.published_at)}
+                  </time>
+                  <h3 className="mt-2 font-medium tracking-tight">{post.title}</h3>
+                  {post.summary ? (
+                    <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">
+                      {post.summary}
+                    </p>
+                  ) : null}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </div>
   );
 }

@@ -9,11 +9,13 @@ export function NewsArticle({ post }: { post: NewsPost }) {
         <time dateTime={post.published_at} className="text-xs text-muted-foreground">
           {formatKoreanDate(post.published_at)}
         </time>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-balance">
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-balance">
           {post.title}
         </h1>
         {post.summary ? (
-          <p className="mt-3 text-sm text-muted-foreground">{post.summary}</p>
+          <p className="mt-4 text-base leading-relaxed text-muted-foreground">
+            {post.summary}
+          </p>
         ) : null}
         {post.author_name ? (
           <p className="mt-3 text-xs text-muted-foreground">{post.author_name}</p>
