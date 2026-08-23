@@ -10,6 +10,8 @@
 
 | 버전 | 변경 |
 |------|------|
+| v7 | T1.4 결과 반영 — 환경변수를 `env.ts`(클라이언트) / `env.server.ts`(서버 시크릿, `server-only`) 2개로 분리. 단일 `env.ts`로 두면 서버 시크릿 스키마가 클라이언트 번들 경로에 노출된다. Supabase 클라이언트 3종 추가. |
+| v6 | T1.3 결과 반영 — 앱 셸 구성 완료, `next-themes` 도입으로 다크 모드 해소, `src/lib/navigation.ts` · `common/*` 목록 갱신, 플레이스홀더 페이지 4종의 대체 시점 명시, TanStack Query 프로바이더를 T1.7로 이관. |
 | v5 | T1.2 결과 반영 — §2.6 shadcn 설정 신설(base=radix / preset=nova, alias 2건 수정 사유), 프로젝트 토큰 분리 원칙, 루트 트리에서 `tailwind.config.ts` 제거(Tailwind v4 CSS-first) 후 `components.json` 추가, T1.3에 다크 모드 활성화 과제 명시. |
 | v4 | 초기 지원 TCG를 **포켓몬 + 원피스** 2종으로 확정(유희왕 제외). §4.0 게임별 룰 신설, `games` 테이블에 룰 컬럼 추가, `deck_cards.zone`을 `main\|leader\|don`으로 변경, 첫 손패 매수를 게임별로 분기. |
 | v3 | T1.1 실착수 결과 반영 — Next.js **16.3.2** 설치 확정(15.x 표기 정정), Next 16 파괴적 변경 §2.4 신설, 실제 npm scripts와 툴체인 버전 고정 사유 기록, Node 버전 제약 명시. |
@@ -299,9 +301,14 @@ src/components/
 │       ├── news-list.tsx
 │       └── news-article.tsx
 └── common/
-    ├── header.tsx  footer.tsx
-    ├── affiliate-carousel.tsx            # 하단 제휴 마케팅 캐러셀
-    ├── error-boundary.tsx
+    ├── header.tsx                        # 서버 컴포넌트. 내비 · 테마 토글 조립
+    ├── main-nav.tsx                      # 데스크톱 내비 (client — usePathname)
+    ├── mobile-nav.tsx                    # 모바일 시트 내비 (client)
+    ├── footer.tsx                        # 면책 조항 · 저작권
+    ├── theme-provider.tsx                # next-themes 래퍼 (client)
+    ├── theme-toggle.tsx                  # 라이트 / 다크 전환 (client)
+    ├── affiliate-carousel.tsx            # 하단 제휴 마케팅 캐러셀 (T3.6)
+    ├── error-boundary.tsx                # 기능 단위 클라이언트 에러 경계
     └── empty-state.tsx
 ```
 
@@ -339,7 +346,9 @@ src/lib/
 │   └── binder-ui-store.ts
 ├── hooks/
 │   └── use-media-query.ts ...
-├── env.ts                                # zod 부팅 시 검증, 누락 시 즉시 실패
+├── navigation.ts                         # 주 내비게이션 정의 (헤더 데스크톱 · 모바일 공유)
+├── env.ts                                # parseEnv 헬퍼 + 클라이언트 환경변수 (NEXT_PUBLIC_*)
+├── env.server.ts                         # ★ 서버 시크릿 전용. 'server-only'로 브라우저 import 차단
 └── utils/
     ├── cn.ts  format.ts  currency.ts  hash.ts
 ```
@@ -639,9 +648,23 @@ CRAWLER_SHARED_SECRET=
   - `globals.css` 토큰 계층 + 프로젝트 토큰(게임 아이덴티티 2종) 별도 블록
   - 수정: shadcn이 생성한 `--font-sans: var(--font-sans)` 자기참조를 `var(--font-geist-sans)`로 교정 (미교정 시 `@apply font-sans`가 무효)
   - 검증: `lint` ✅ / `typecheck` ✅ / `test` ✅ 7건 / `build` ✅ + 빌드 CSS에 게임 토큰 반영 확인
-- [ ] **T1.3** 루트 레이아웃 · 라우트 그룹 `(content)` / `(app)` · `common/header.tsx` · `common/footer.tsx` · `error-boundary.tsx`
-  - ⚠️ **다크 모드 활성화 포함** — shadcn이 `@custom-variant dark (&:is(.dark *))` 클래스 기반으로 설정했으나 `.dark`를 부여하는 주체가 없어 현재 다크 토큰이 동작하지 않는다. 스캐폴드의 `prefers-color-scheme` 방식이 대체된 상태이므로 테마 프로바이더(`next-themes` 등) 도입이 필요하다.
-- [ ] **T1.4** Supabase 연결: `src/lib/supabase/{client,server,admin}.ts`, `src/lib/env.ts`(zod 검증), `.env.example`
+- [x] **T1.3** 루트 레이아웃 · 라우트 그룹 · 앱 셸 — 완료
+  - 루트 레이아웃: `ThemeProvider` + `Header` + `main` + `Footer`, 타이틀 템플릿(`%s | 덱바인더`)
+  - **다크 모드 해소** — `next-themes`(`attribute="class"`, `defaultTheme="system"`) 도입으로 T1.2에서 끊겼던 `.dark` 토큰이 동작. `<html suppressHydrationWarning>` 필요
+  - 라우트 그룹: `(content)` 좁은 단일 컬럼(max-w-3xl) / `(app)` 넓은 컨테이너(max-w-6xl)
+  - `common/`: header · main-nav · mobile-nav · footer · theme-provider · theme-toggle · error-boundary
+  - `src/lib/navigation.ts` — 데스크톱 · 모바일 내비가 공유하는 단일 정의
+  - `app/error.tsx`(라우트 에러) + `common/error-boundary.tsx`(기능 단위 경계, 테스트 5건)
+  - **플레이스홀더 페이지 4종** — `/cards` `/decks` `/binder` `/news`. 내비 목적지를 만들어 셸을 실제로 검증하기 위한 것으로, 각각 T1.7 · T2.4 · T3.3 · T1.9에서 대체된다
+  - 검증: `lint` ✅ / `typecheck` ✅ / `test` ✅ 12건 / `build` ✅ 6라우트 정적 생성 / `test:e2e` ✅ 4건(내비 이동 · 타이틀 템플릿 · 다크 모드 토글 포함)
+  - 미포함: **TanStack Query 프로바이더는 T1.7로 미룸** — 실제 사용처가 생길 때 도입해야 미사용 의존성이 남지 않는다
+- [x] **T1.4** Supabase 연결 + 환경변수 검증 — 완료
+  - `env.ts`(`parseEnv` 헬퍼 + 클라이언트 변수, 테스트 5건) / **`env.server.ts` 신설** — 시크릿을 `server-only`로 분리해 클라이언트 번들 유입을 빌드 단계에서 차단
+  - `supabase/client.ts`(브라우저) · `server.ts`(RSC·핸들러, **`await cookies()`** §2.4) · `admin.ts`(service_role, RLS 우회 경고 주석)
+  - `.env.example`(템플릿) + `.env.local`(gitignore 확인 완료) — 크롤러 변수는 T2.9에 주석 처리
+  - Vitest에 더미 환경변수 주입 — `env.ts`가 모듈 로드 시 검증하므로 테스트에도 유효 값이 필요
+  - 검증: `lint` ✅ / `typecheck` ✅ / `test` ✅ 18건 / `build` ✅ / `test:e2e` ✅ 4건
+  - ⚠️ **실제 Supabase 자격증명 미입력 상태** — `.env.local`을 채우기 전까지 실제 연결은 검증되지 않았다. 첫 실연결 검증은 T1.5 마이그레이션에서 이뤄진다
 - [ ] **T1.5** 마이그레이션 001 — games / card_sets / similar_groups / cards / keywords / card_keywords + 인덱스 + RLS. `games`에 `ptcg` · `opcg` 2행과 게임별 룰 값(§4.0) 투입
 - [ ] **T1.6** `scripts/seed.ts` + 초기 카드 데이터 투입 — 게임별로 분리
   - T1.6a 포켓몬: 공개 API 조사 후 수집 (API 가용 시 자동화)
