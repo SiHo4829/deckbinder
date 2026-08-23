@@ -10,6 +10,8 @@
 
 | 버전 | 변경 |
 |------|------|
+| v5 | T1.2 결과 반영 — §2.6 shadcn 설정 신설(base=radix / preset=nova, alias 2건 수정 사유), 프로젝트 토큰 분리 원칙, 루트 트리에서 `tailwind.config.ts` 제거(Tailwind v4 CSS-first) 후 `components.json` 추가, T1.3에 다크 모드 활성화 과제 명시. |
+| v4 | 초기 지원 TCG를 **포켓몬 + 원피스** 2종으로 확정(유희왕 제외). §4.0 게임별 룰 신설, `games` 테이블에 룰 컬럼 추가, `deck_cards.zone`을 `main\|leader\|don`으로 변경, 첫 손패 매수를 게임별로 분기. |
 | v3 | T1.1 실착수 결과 반영 — Next.js **16.3.2** 설치 확정(15.x 표기 정정), Next 16 파괴적 변경 §2.4 신설, 실제 npm scripts와 툴체인 버전 고정 사유 기록, Node 버전 제약 명시. |
 | v2 | `CLAUDE.md` 확정에 따라 전면 정렬 — pnpm 모노레포 안 폐기, `npm` + `src/` 4구획 단일 앱 구조 채택. 대체 카드 그룹화를 M:N 조인 테이블에서 `similar_group_id` FK로 변경. 매물 필터를 3종으로 고정. |
 | v1 | 초안 |
@@ -105,6 +107,8 @@
 
 > `next dev` 실행 시 Next가 `CLAUDE.md` 하단에 `<!-- BEGIN:nextjs-agent-rules -->` 블록을 자동 추가한다. 제거해도 재생성되므로 커밋에 포함한다.
 
+> **트러블슈팅 — dev 서버 디렉토리당 1개 제한:** Next 16은 같은 디렉토리에서 dev 서버를 중복 기동하지 못하게 막는다. 좀비 프로세스가 남으면 `npm run test:e2e`가 `webServer was not able to start (exit code 1)`로 실패한다. 기존 서버의 PID는 `.next/dev/logs/next-development.log` 또는 기동 시 출력에 표시되며, `taskkill /PID <pid> /F`로 정리한 뒤 재실행한다.
+
 ### 2.5 툴체인 버전 제약 (Node)
 
 **현재 개발 환경 Node v20.15.1** 기준으로 아래 패키지를 하향 고정했다. Next 16 자체는 `>=20.9.0`이라 문제없지만, 최신 테스트 툴체인은 Node **20.19.0+** 를 요구한다(20.19에서 백포트된 `require(esm)`과 rolldown 네이티브 바인딩).
@@ -116,7 +120,34 @@
 | `vite-tsconfig-paths` | `^5` | 동일 |
 | `jsdom` | `^26` | v30은 `require(esm)` 사용 → Node 20.19+ 필요 |
 
-> **권장 조치:** Node를 **22 LTS**로 올리면 위 4개를 최신(vitest 4 / plugin-react 6 / jsdom 30)으로 되돌릴 수 있다. 팀 전체가 동일 버전을 쓰도록 `.nvmrc` 추가를 권장한다.
+> **권장 조치:** Node를 **22 LTS**로 올리면 위 4개를 최신(vitest 4 / plugin-react 6 / jsdom 30)으로 되돌릴 수 있다. 팀 전체가 동일 버전을 쓰도록 `.nvmrc` 추가를 권장한다. shadcn CLI(`>=20.18.1`)도 같은 이유로 경고를 낸다.
+
+### 2.6 shadcn/ui 설정 (T1.2 확정)
+
+shadcn CLI 4.19에서 `-b/--base` 플래그의 의미가 **base color → primitive 라이브러리**(`base` / `radix` / `aria`)로 바뀌었다. 프리셋도 필수 선택 항목이다.
+
+| 항목 | 값 | 사유 |
+|------|-----|------|
+| base (primitive) | **`radix`** | §2.1의 "shadcn/ui (Radix 기반)" 유지. CLI 기본값은 `base`(Base UI)로 바뀌었으나 Radix가 성숙도 · 레퍼런스 면에서 우위 |
+| preset | **`nova`** (Lucide + Geist) | 스캐폴드가 이미 Geist 폰트를 쓰고 있어 일관 |
+| baseColor | `neutral` | 카드 이미지가 주인공이므로 채도 낮은 중립 배경 |
+| cssVariables | `true` | 토큰 기반 테마 |
+
+**alias는 CLI 기본값에서 2개를 수정했다.** 기본값을 그대로 두면 `CLAUDE.md`의 `src/` 4구획 규칙과 §3.3 구조를 위반한다.
+
+| alias | CLI 기본값 | 수정값 | 사유 |
+|-------|-----------|--------|------|
+| `hooks` | `@/hooks` | **`@/lib/hooks`** | `src/hooks`는 CLAUDE.md가 허용한 4구획(app/components/lib/types) 밖 |
+| `utils` | `@/lib/utils` | **`@/lib/utils/cn`** | §3.3은 `utils/`를 디렉토리로 정의. 파일 `utils.ts`와 디렉토리 `utils/`가 공존하면 import 해석이 모호해짐 |
+
+**프로젝트 토큰은 `globals.css` 최하단의 별도 블록에 둔다.** shadcn이 생성·갱신하는 영역과 분리해야 재초기화 시 유실되지 않는다. 현재 정의된 프로젝트 토큰:
+
+| 토큰 | 용도 |
+|------|------|
+| `--color-game-ptcg` / `-foreground` | 포켓몬 게임 배지 · 필터 · 티어표 |
+| `--color-game-opcg` / `-foreground` | 원피스 게임 배지 · 필터 · 티어표 |
+
+> **기준가 전용 색상 토큰은 의도적으로 만들지 않았다.** 가격에 의미색(상승 녹색 등)을 부여하면 P6의 "시세 변동 표현 배제" 원칙과 충돌한다. 기준가는 `foreground` / `primary`로 표기한다.
 
 ---
 
@@ -169,7 +200,7 @@ deckbinder/
 ├── CLAUDE.md
 ├── README.md
 ├── next.config.ts
-├── tailwind.config.ts
+├── components.json                 # shadcn 설정 (base=radix, preset=nova, alias는 §3.3 규칙에 맞춰 수정됨)
 ├── tsconfig.json
 └── package.json
 ```
@@ -250,7 +281,7 @@ src/components/
 │   │   ├── deck-builder.tsx
 │   │   └── deck-source-link.tsx          # 필요 카드 → 매물 검색 진입
 │   ├── simulator/
-│   │   ├── opening-hand.tsx              # 5장 드로우 표시
+│   │   ├── opening-hand.tsx              # 첫 손패 표시 (ptcg 7장 / opcg 5장)
 │   │   ├── mulligan-button.tsx
 │   │   └── probability-panel.tsx
 │   ├── market/
@@ -285,7 +316,7 @@ src/lib/
 ├── domain/                               # ★ React·Next·Supabase import 금지 (순수 함수)
 │   ├── simulator/
 │   │   ├── shuffle.ts                    # 시드 기반 Fisher-Yates (테스트 재현성)
-│   │   ├── draw.ts                       # 5장 드로우 · 멀리건
+│   │   ├── draw.ts                       # 게임별 첫 손패 드로우 · 멀리건
 │   │   └── probability.ts                # 초기 손패 하이퍼기하 확률
 │   ├── deck/
 │   │   ├── validate.ts                   # 매수 제한 · 덱 크기 검증
@@ -364,11 +395,33 @@ export interface MarketAdapter {
 
 ## 4. 도메인 설계
 
+### 4.0 지원 TCG 범위 (확정)
+
+**초기 지원: 포켓몬 카드 게임(`ptcg`) · 원피스 카드 게임(`opcg`) 2종.** 유희왕은 범위에서 제외한다.
+
+두 게임은 덱 구조와 첫 손패 규칙이 서로 다르므로, **덱 검증과 시뮬레이터는 게임별 룰 테이블을 주입받는 형태로 구현한다.** 규칙을 코드에 하드코딩하지 않는다.
+
+| 항목 | 포켓몬 (`ptcg`) | 원피스 (`opcg`) |
+|------|-----------------|-----------------|
+| 메인 덱 매수 | 정확히 **60장** | 정확히 **50장** |
+| 동일 카드 매수 제한 | **4장** (기본 에너지는 무제한) | **4장** (카드 넘버 기준) |
+| 별도 존 | 없음 | **리더 1장**, **DON!! 덱 10장** |
+| 첫 손패 | **7장** | **5장** |
+| 멀리건 조건 | 기본 포켓몬 0장이면 공개 후 재드로우 (상대가 1장 추가 드로우) | 1회 한정, 5장 되돌리고 재드로우 |
+| 추가 제약 | — | 덱 카드 색상이 리더 색상에 포함되어야 함 |
+
+> ⚠️ **README의 "첫 손패 5장 드로우" 표기는 원피스 기준이다.** 포켓몬은 7장이므로 시뮬레이터 UI 문구와 `draw.ts`는 게임별로 분기해야 한다. README 수정 권장.
+
+`deck_cards.zone` enum은 위 구조에 맞춰 `main | leader | don`으로 정의한다. (초안의 `extra` / `side`는 유희왕 구조여서 폐기)
+
+기본 에너지 무제한 예외는 `cards.sub_type = 'basic_energy'`로 식별하여 `validate.ts`에서 매수 제한을 면제한다.
+
 ### 4.1 데이터 모델 (Supabase / PostgreSQL)
 
 ```
 ── 마스터 데이터 ─────────────────────────────
-games              (id, code'ptcg|ygo|opcg', name_ko, name_ja)
+games              (id, code'ptcg|opcg', name_ko, name_ja,
+                    deck_size, hand_size, copy_limit)   -- 게임별 룰 (§4.0)
 card_sets          (id, game_id→games, code, name_ko, name_ja, released_at)
 similar_groups     (id, game_id, name, role_note)   -- 대체 카드 그룹
 cards              (id, game_id, set_id→card_sets, code,
@@ -389,7 +442,8 @@ card_prices        (id, card_id→cards, base_price_jpy, base_price_krw,
 decks              (id, game_id, owner_id→profiles NULL, name, description,
                     source_type'tournament|meta|user', tier'S|A|B|C' NULL,
                     tournament_name, placed_at, is_public, created_at)
-deck_cards         (deck_id→decks, card_id→cards, zone'main|extra|side', count)
+deck_cards         (deck_id→decks, card_id→cards, zone'main|leader|don', count)
+                    -- leader/don은 원피스 전용. 포켓몬은 main만 사용한다.
 
 ── 사용자 ───────────────────────────────────
 profiles           (id→auth.users, nickname, avatar_url, created_at)
@@ -560,7 +614,7 @@ CRAWLER_SHARED_SECRET=
 | 단위 | Vitest | `workers/crawler/src/adapters` | 픽스처 HTML → `Listing` 정규화(가격 · 통화 · 상태 · 등급 파싱), 파싱 실패 시 graceful skip |
 | 통합 | Vitest + MSW | Route Handlers | 쿼터 초과 429, `cardId` 배열 요청 400, 비소유자 스트림 접근 403, 미인증 쓰기 401 |
 | 통합 | vitest-pool-workers | 워커 | 토큰 재사용 거부, 만료 토큰 거부, 잘못된 서명 거부 |
-| E2E | Playwright | 핵심 흐름 | ① 카드 검색 → 상세 → 매물 조회 연출 완주(8초 이상 소요 확인) ② 덱 빌더 → 5장 드로우 → 멀리건 ③ 로그인 → 컬렉션 추가 → 공유 링크 |
+| E2E | Playwright | 핵심 흐름 | ① 카드 검색 → 상세 → 매물 조회 연출 완주(8초 이상 소요 확인) ② 덱 빌더 → 첫 손패 드로우(게임별 매수) → 멀리건 ③ 로그인 → 컬렉션 추가 → 공유 링크 |
 
 **Developer 규칙:** 각 태스크는 `실패하는 테스트 커밋` → `구현 커밋` 순서를 지킨다 (AGENT.md).
 
@@ -578,19 +632,28 @@ CRAWLER_SHARED_SECRET=
   - 검증: `lint` ✅ / `typecheck` ✅ / `test` ✅ 3건 / `build` ✅ / `test:e2e` ✅ 1건
   - **E2E는 전용 포트 3100 사용** — 3000번은 다른 프로젝트와 충돌하며, `reuseExistingServer: false`로 외부 서버 오접속을 차단한다
   - 부수 산출물: `src/components/common/empty-state.tsx`(+테스트) — 하네스 검증 겸 §3.2 정의 컴포넌트
-- [ ] **T1.2** shadcn/ui 초기화 + 디자인 토큰 정의 (`src/components/ui`)
+- [x] **T1.2** shadcn/ui 초기화 + 디자인 토큰 정의 — 완료
+  - `components.json`(base=radix / preset=nova / baseColor=neutral), alias 2건 수정 (§2.6)
+  - `src/lib/utils/cn.ts` + 테스트 4건
+  - 기본 컴포넌트 5종 설치: `button` · `dialog` · `sheet` · `select` · `skeleton`
+  - `globals.css` 토큰 계층 + 프로젝트 토큰(게임 아이덴티티 2종) 별도 블록
+  - 수정: shadcn이 생성한 `--font-sans: var(--font-sans)` 자기참조를 `var(--font-geist-sans)`로 교정 (미교정 시 `@apply font-sans`가 무효)
+  - 검증: `lint` ✅ / `typecheck` ✅ / `test` ✅ 7건 / `build` ✅ + 빌드 CSS에 게임 토큰 반영 확인
 - [ ] **T1.3** 루트 레이아웃 · 라우트 그룹 `(content)` / `(app)` · `common/header.tsx` · `common/footer.tsx` · `error-boundary.tsx`
+  - ⚠️ **다크 모드 활성화 포함** — shadcn이 `@custom-variant dark (&:is(.dark *))` 클래스 기반으로 설정했으나 `.dark`를 부여하는 주체가 없어 현재 다크 토큰이 동작하지 않는다. 스캐폴드의 `prefers-color-scheme` 방식이 대체된 상태이므로 테마 프로바이더(`next-themes` 등) 도입이 필요하다.
 - [ ] **T1.4** Supabase 연결: `src/lib/supabase/{client,server,admin}.ts`, `src/lib/env.ts`(zod 검증), `.env.example`
-- [ ] **T1.5** 마이그레이션 001 — games / card_sets / similar_groups / cards / keywords / card_keywords + 인덱스 + RLS
-- [ ] **T1.6** `scripts/seed.ts` + 초기 카드 데이터 투입 (1개 게임 우선 — §9 결정 필요)
+- [ ] **T1.5** 마이그레이션 001 — games / card_sets / similar_groups / cards / keywords / card_keywords + 인덱스 + RLS. `games`에 `ptcg` · `opcg` 2행과 게임별 룰 값(§4.0) 투입
+- [ ] **T1.6** `scripts/seed.ts` + 초기 카드 데이터 투입 — 게임별로 분리
+  - T1.6a 포켓몬: 공개 API 조사 후 수집 (API 가용 시 자동화)
+  - T1.6b 원피스: 공식 공개 API 부재 예상 → 수집 방식 결정 필요 (§9.2)
 - [ ] **T1.7** `GET /api/cards` + 도감 페이지 (필터 패널 · nuqs URL 동기화 · 무한스크롤)
 - [ ] **T1.8** 카드 상세 + `base-price-badge` + `similar-cards`(대체 카드 그룹)
 - [ ] **T1.9** 뉴스 모듈: 마이그레이션 + 목록 / 상세(ISR) + `sitemap.ts` / `robots.ts` + 개인정보처리방침 · 면책 페이지 (애드센스 심사 요건)
 
 ### Phase 2 — 핵심 유틸리티
 
-- [ ] **T2.1** `src/lib/domain/simulator` TDD 구현 (shuffle / draw / mulligan / probability)
-- [ ] **T2.2** `src/lib/domain/deck` 검증 · 통계 TDD 구현
+- [ ] **T2.1** `src/lib/domain/simulator` TDD 구현 (shuffle / draw / mulligan / probability) — 손패 매수를 게임 룰로 주입받아 ptcg 7장 · opcg 5장을 모두 커버
+- [ ] **T2.2** `src/lib/domain/deck` 검증 · 통계 TDD 구현 — ptcg 60장 / opcg 50장, 4장 제한(기본 에너지 예외), opcg 리더 색상 일치 검증
 - [ ] **T2.3** 마이그레이션 002 — decks / deck_cards + RLS
 - [ ] **T2.4** 덱 레시피 목록 · 티어표 · 상세 페이지
 - [ ] **T2.5** 덱 빌더 UI (`deck-builder-store.ts`) + 첫 손패 드로우 · 멀리건 UI
@@ -616,8 +679,8 @@ CRAWLER_SHARED_SECRET=
 
 ## 9. 결정이 필요한 사항 (Architect → 사용자)
 
-1. **초기 지원 TCG 범위** — 포켓몬 / 유희왕 / 원피스를 동시에 열면 카드 DB 구축 비용이 3배가 되고, 게임별 덱 룰(매수 제한 · 엑스트라 / 사이드 존)이 달라 `deck_cards.zone`과 검증 로직이 복잡해진다. **Phase 1은 1개 게임 우선을 권장.** T1.5 스키마 확정 전에 답이 필요하다.
-2. **카드 데이터 원천** — 공개 API 활용 가능 여부에 따라 T1.6의 난이도가 크게 달라진다. 수동 구축 시 이미지 저작권 처리 방침이 필요하다.
+1. ~~**초기 지원 TCG 범위**~~ → **확정: 포켓몬(`ptcg`) + 원피스(`opcg`) 2종, 유희왕 제외.** 상세 룰과 스키마 영향은 §4.0 참조.
+2. **카드 데이터 원천** — 공개 API 활용 가능 여부에 따라 T1.6의 난이도가 크게 달라진다. 포켓몬은 공개 API(Pokémon TCG API 등) 후보가 있으나 **원피스는 공식 공개 API가 없어 수동 구축 가능성이 높다.** 두 게임의 수집 방식이 달라지므로 T1.6은 게임별로 분리해 진행한다. 수동 구축 시 이미지 저작권 처리 방침이 필요하다.
 3. **카드 이미지 호스팅** — 외부 핫링크 대신 Supabase Storage 또는 Cloudflare R2 캐싱 권장.
 4. **스크래핑 준수 범위** — 대상 3개 사이트의 이용약관 / `robots.txt` 검토 결과를 `docs/crawler-compliance.md`에 기록해야 한다. 차단 시 대체 전략(공식 API · 제휴)이 필요하다.
 5. **비로그인 매물 검색 허용 여부** — 허용 시 IP 해시 쿼터만으로 방어해야 하며 우회 여지가 커진다. 로그인 필수면 방어력은 오르나 초기 유입이 줄어든다.
