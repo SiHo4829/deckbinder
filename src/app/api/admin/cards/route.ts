@@ -1,18 +1,15 @@
 import { NextResponse } from "next/server";
 
-import { requireAdmin } from "@/lib/admin/guard";
-import { databaseError, invalidInput } from "@/lib/admin/responses";
+import { requireAdminInput } from "@/lib/admin/input";
+import { databaseError } from "@/lib/admin/responses";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { cardInputSchema } from "@/lib/validation/admin";
 
 export async function POST(request: Request) {
-  const denied = await requireAdmin();
-  if (denied) return denied;
+  const input = await requireAdminInput(request, cardInputSchema);
+  if (!input.ok) return input.response;
 
-  const parsed = cardInputSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return invalidInput(parsed.error);
-
-  const { keyword_ids: keywordIds, ...card } = parsed.data;
+  const { keyword_ids: keywordIds, ...card } = input.data;
   const db = createSupabaseAdminClient();
 
   const { data, error } = await db

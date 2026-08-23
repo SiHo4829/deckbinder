@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { createSupabaseAnonClient } from "@/lib/supabase/public";
 import type { NewsListItem, NewsPost } from "@/types/news";
 
@@ -27,7 +29,11 @@ export async function fetchPublishedPosts(limit = 20): Promise<NewsListItem[]> {
   return (data ?? []) as NewsListItem[];
 }
 
-export async function fetchPostBySlug(slug: string): Promise<NewsPost | null> {
+/**
+ * `cache()`로 감싼 이유: generateMetadata와 페이지 본문이 같은 slug로 각각 부른다.
+ * 감싸지 않으면 렌더 1회에 DB를 두 번 왕복한다 (Next 15+ 의 fetch 기본은 no-store).
+ */
+export const fetchPostBySlug = cache(async (slug: string): Promise<NewsPost | null> => {
   const supabase = createSupabaseAnonClient();
 
   const { data } = await supabase
@@ -37,7 +43,7 @@ export async function fetchPostBySlug(slug: string): Promise<NewsPost | null> {
     .maybeSingle();
 
   return (data as NewsPost | null) ?? null;
-}
+});
 
 /** generateStaticParams · sitemap 용. */
 export async function fetchPublishedSlugs(): Promise<
