@@ -17,7 +17,7 @@
 | 지원 TCG는 **포켓몬 + 원피스** 2종 (유희왕 제외) | §4.0 |
 | 카드 데이터는 **자체 구축**. 외부 사이트 연동 없음 | §4.4 |
 | `cards.name_ja`는 `not null`, `name_ko`는 nullable | §4.4 |
-| 대체 카드는 M:N이 아니라 `similar_group_id` FK | CLAUDE.md 지정 |
+| 대체 카드는 `base_code`(생성 컬럼)로 판정. `similar_group_id`는 007에서 제거 | §4.6 |
 | 단일 앱 구조(`src/` 4구획). 모노레포 아님 | CLAUDE.md 지정 |
 | shadcn base는 `radix` (CLI 기본값 `base` 아님) | §2.6 |
 | RLS 정책과 **함께 GRANT를 반드시 준다** | §4.1-1 |
@@ -164,6 +164,9 @@ shadcn CLI 4.19에서 `-b/--base` 플래그의 의미가 **base color → primit
 | **DB 타입 미생성** | 타입 없이 쓰면 Supabase가 임베드 관계를 **배열로 추론**하지만 런타임은 객체다. 컬럼이 아닌 필드를 insert/update에 넘겨도 잡히지 않는다(실제로 PATCH가 `keyword_ids`를 넘기고 있었다) | `npx supabase gen types typescript --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres > src/types/database.ts`. **스키마를 바꾸면 다시 생성한다** |
 | **nuqs 배열 직렬화** | 배열 파라미터를 **쉼표로 직렬화**한다(`keywords=a,b`). 반복 키(`keywords=a&keywords=b`)로 보내면 첫 값만 읽어 **필터가 조용히 일부만 적용**된다 | 키워드 코드를 `^[a-z0-9_]+$`로 제한해 쉼표가 값에 들어갈 수 없게 막았다. 서버 파서는 두 형식을 모두 받는다 |
 | **`useSearchParams` + 정적 프리렌더** | Suspense 경계가 없으면 `next build`가 실패한다. **dev와 E2E는 통과**해서 빌드까지 돌리지 않으면 놓친다 | nuqs를 쓰는 컴포넌트를 `<Suspense>`로 감싼다 |
+| **커서 키 ≠ 유니크 키** | `cards`의 유니크는 `(game_id, code)`인데 커서를 `code` 하나로 잡았다. 게임 필터 없이 훑을 때 두 게임에 같은 코드가 있으면 **카드 한 장이 조용히 사라진다.** 에러도 빈 결과도 아니라 눈치채기 어렵다 | 커서는 **유니크 제약과 같은 폭**이어야 한다. `(code, id)` 튜플로 정렬·비교한다 (007) |
+| **`generateMetadata` + 페이지 본문의 중복 조회** | 둘이 같은 인자로 같은 조회를 각각 한 번씩 한다. Next 15+ 의 `fetch` 기본은 캐시 안 함이라 **DB 왕복이 2배**가 되는데 화면은 멀쩡하다 | 조회 함수를 React `cache()`로 감싼다. 캐시 범위가 렌더 1회라 최신성은 그대로다 |
+| **eslint flat config는 `.gitignore`를 안 본다** | `supabase start`가 만드는 `supabase/.temp/`를 린트가 스캔해 남의 번들 코드에서 오류 수백 개가 쏟아진다 | `eslint.config.mjs`의 `globalIgnores`에 명시한다 |
 
 
 ### 2.8 비주얼 언어 (T1.10 확정)
@@ -504,15 +507,13 @@ export interface MarketAdapter {
 games              (id, code'ptcg|opcg', name_ko, name_ja,
                     deck_size, hand_size, copy_limit)   -- 게임별 룰 (§4.0)
 card_sets          (id, game_id→games, code, name_ko, name_ja, released_at)
-similar_groups     (id, game_id, name, role_note)   -- 대체 카드 그룹
 cards              (id, game_id, set_id→card_sets, code,
                     name_ja NOT NULL,      -- 크롤러 검색 키 (§4.4, 002에서 교정)
                     name_ko NULL,          -- 커버리지 부분적. 표기는 coalesce(name_ko, name_ja)
                     name_en NULL,
                     rarity, attribute, card_type, sub_type, image_url,
                     effect_text,
-                    similar_group_id→similar_groups NULL,   -- ★ CLAUDE.md 지정 FK
-                    search_vector tsvector)
+                    base_code GENERATED)   -- split_part(code, '_', 1). 대체 카드 판정 (§4.6)
 keywords           (id, game_id, code'draw|energy_accel|search|...', label_ko, label_ja)
 card_keywords      (card_id→cards, keyword_id→keywords)     -- 태그 검색용 M:N, PK(card_id, keyword_id)
 
@@ -551,13 +552,11 @@ market_sessions    (id, user_id NULL, ip_hash, card_id→cards,
                     -- 쿼터 감사 로그 겸 SSE 세션 레코드
 ```
 
-> **`similar_group_id` FK 채택 (CLAUDE.md 지정)** — 카드 1장은 그룹 1개에만 속한다. "드로우 계열이면서 서치 계열"처럼 한 카드가 복수 그룹에 걸치는 경우는 표현할 수 없으므로, 그런 요구가 생기면 효과 키워드 태그(`card_keywords`)로 대신 커버한다. 구조 변경이 필요해지면 코드보다 본 문서를 먼저 갱신한다.
+> **`similar_groups` / `search_vector` 제거 (007)** — 둘 다 001에서 만들었지만 이후 설계가 바뀌어 앱이 한 번도 조회하지 않았다. `similar_groups`는 §4.6이 `base_code`로 대체했고, `search_vector`는 §2.7의 일본어 tsvector 문제로 `ilike`+`pg_trgm`에 자리를 내줬다. 특히 `search_vector`는 **insert/update마다 트리거가 돌고 GIN 인덱스가 갱신되는데 읽는 곳이 없었다.** `CLAUDE.md`의 `similar_group_id` 지정 문구도 함께 갱신했다.
 
 **인덱스 / 검색**
 
-- `cards.search_vector` — GIN. `name_ko/ja/en + effect_text` 대상 `tsvector`, 트리거로 갱신.
 - 부분일치 보강: `pg_trgm` GIN 인덱스를 `cards.name_ko`와 **`cards.name_ja`** 양쪽에 둔다. 실데이터 대부분이 일본어명에 쌓이므로 일본어 인덱스가 실질적으로 더 중요하다 (002).
-- `cards(similar_group_id)` — 대체 카드 조회용.
 - `card_keywords(keyword_id, card_id)` — 키워드 교차 필터용 역방향 인덱스.
 - `market_sessions(ip_hash, requested_at DESC)`, `market_sessions(user_id, requested_at DESC)` — 쿼터 조회용.
 
@@ -586,7 +585,7 @@ Reviewer는 신규 테이블마다 `revoke all` → 최소 권한 `grant` → RL
 
 | 테이블 | 정책 |
 |--------|------|
-| `games`, `card_sets`, `cards`, `keywords`, `card_keywords`, `similar_groups`, `card_prices`, `news_posts` | 익명 `SELECT` 허용, 쓰기는 `service_role`만 |
+| `games`, `card_sets`, `cards`, `keywords`, `card_keywords`, `card_prices`, `news_posts` | 익명 `SELECT` 허용, 쓰기는 `service_role`만 |
 | `decks` | `SELECT`: `is_public OR owner_id = auth.uid()` / 쓰기: 소유자만 |
 | `deck_cards` | 상위 `decks`의 가시성을 따름 |
 | `collection_items` | 전 작업 `user_id = auth.uid()` |
@@ -651,7 +650,7 @@ OP17-001_p2   루피 (SEC)
 
 > ⚠️ **코드 규칙:** 밑줄(`_`)은 **다른 인쇄본을 구분하는 용도로만** 쓴다. 일반 카드 코드에 밑줄을 넣으면 의도치 않게 묶인다.
 
-> **`similar_group_id`는 현재 쓰이지 않는다.** `CLAUDE.md`가 "interchangeable 카드는 `similar_group_id` FK로 묶는다"고 지정하고 있으나, 실제 판정은 `base_code`로 한다. 컬럼은 남겨 두었다 — 효과가 비슷한 **다른 이름의 카드**를 수동으로 묶어야 할 때 쓸 수 있다. `CLAUDE.md` 갱신 필요.
+> **`similar_group_id`는 007에서 제거했다.** 행이 하나도 없었고 등록 화면도 없었다. 효과가 비슷한 **다른 이름의 카드**를 묶을 필요가 생기면 효과 키워드 태그(`card_keywords`)로 커버하고, 그래도 부족하면 그때 다시 설계한다. `CLAUDE.md`의 지정 문구도 함께 갱신했다.
 
 ### 4.5 관리자 화면 (T1.6-A)
 
@@ -675,10 +674,10 @@ OP17-001_p2   루피 (SEC)
 
 | Method | Path | 설명 | 인증 |
 |--------|------|------|------|
-| GET | `/api/cards` | 도감 검색. `q, game, set, rarity, attribute, cardType, keywords[], cursor, limit`. **키워드는 AND(모두 보유)** | — |
+| GET | `/api/cards` | 도감 검색. `q, game, set, rarity, attribute, cardType, keywords[], cursor, cursorId, limit`. **키워드는 AND(모두 보유)**. 커서는 `(code, id)` 튜플 (007) | — |
 | GET | `/api/cards/facets` | 필터 선택지(레어도 · 속성 · 종류 · 세트 · 키워드). `game`으로 좁힌다 | — |
 | GET | `/api/cards/:cardId` | 상세 + 최신 기준가 1건 | — |
-| GET | `/api/cards/:cardId/alternatives` | 동일 `similar_group_id` 카드 목록 | — |
+| GET | `/api/cards/:cardId/alternatives` | 동일 `base_code` 카드 목록 (현재는 상세 RSC가 직접 조회) | — |
 | GET | `/api/decks` | 레시피 목록. `game, tier, sourceType, cursor` | — |
 | GET | `/api/decks/:deckId` | 레시피 상세(카드 구성 포함) | — |
 | POST | `/api/decks` | 사용자 덱 저장 | ✅ |
@@ -847,14 +846,52 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
   - 검증: `test` 66건 ✅ / `test:e2e` 39건 ✅ / `build` ✅ / 브라우저 라이트·다크 육안 확인
   - **주의**: 푸터에 목록이 생겨 `getByRole("listitem")`이 전역에서 6개를 잡았다. 뉴스 마크다운 E2E는 `getByRole("article")`로 범위를 좁혔다
 
-**관리자 화면 후속** (T1.6-A에서 미포함)
+- [x] **T1.11** 전반 리팩토링 — 죽은 코드 제거 · 중복 통합 (§2.7, §4.1)
+  - 마이그레이션 007: `search_vector`(컬럼·GIN·트리거·함수) + `similar_groups`(테이블·FK·인덱스·컬럼) 제거
+  - **커서 버그 수정** — `search_cards` 커서를 `(code, id)` 튜플로. 게임 필터 없이 훑을 때 같은 코드의 카드가 사라지던 문제
+  - `CardImage` 신설 — 이미지 렌더 4곳 통합. `no-img-element` 예외 5곳 → 2곳
+  - `fetchCardDetail`·`fetchPostBySlug`를 React `cache()`로 — 상세 렌더당 DB 왕복 2회 → 1회
+  - `requireAdminInput()` — 관리자 라우트 6곳의 인증+파싱 4줄을 2줄로. `request.json()`의 `.catch` 누락 위험 제거
+  - `revalidateNews()` — 뉴스 캐시 무효화 경로를 한곳에
+  - `/api/cards`·`/api/cards/facets`를 익명 클라이언트로 (공개 읽기 = anon 규칙 일치)
+  - `npm run db:clean` / `db:sample` 등록, eslint에 `supabase/.temp/**` 무시 추가
+  - `CLAUDE.md`의 `similar_group_id` 지정을 `base_code`로 갱신
+  - 검증: `test` 66건 ✅ / `test:e2e` **42건** ✅(커서 3건 신규) / `build`에서 `/cards/[cardId]`·`/news/[slug]` `●` 유지
 
-- [ ] 카드 수정 · 삭제 UI (API는 있음)
-- [ ] 등록 카드 목록 — 검색 · 페이지네이션 (대시보드는 최근 20건만)
-- [ ] CSV 일괄 등록 — 수백 장 입력 시 폼 하나씩은 부담
-- [ ] 세트 수정 · 삭제
-- [ ] `similar_groups`(대체 카드) 등록 화면
-- [ ] 키워드 수정 · 삭제, 기존 카드의 키워드 재태깅
+**T1.11 리팩토링에서 확인한 백로그**
+
+우선순위 순. A는 **실사용을 막고 있다** — 카드를 등록할 수는 있는데 다시 찾거나 고칠 수단이 없다.
+
+**A. 관리자 운영** (T1.6-A 미포함분)
+
+- [ ] 등록 카드 목록 — 검색 · 페이지네이션. 대시보드가 최근 20건만 보여 **등록한 카드를 다시 찾을 방법이 없다**
+- [ ] 카드 수정 · 삭제 UI — `PATCH`/`DELETE /api/admin/cards/[cardId]`는 이미 있고 화면만 없다
+- [ ] 키워드 재태깅 — `PATCH`가 `keyword_ids`를 400으로 명시 거부한다. 지금은 태그를 고치려면 카드를 지우고 다시 만들어야 한다
+- [ ] 세트 수정 · 삭제, 키워드 수정 · 삭제 (등록만 가능)
+- [ ] CSV 일괄 등록 — 수백 장을 폼 하나씩은 비현실적
+
+**B. 사용자 화면 — 없어서 티가 나는 것**
+
+- [ ] `not-found.tsx` — 지금은 `notFound()`가 헤더·푸터 없는 Next 기본 404를 낸다. 카드·뉴스 상세에서 실제로 발생하고, T1.10의 "상업 서비스로 보이게" 와 정면으로 어긋난다
+- [ ] `loading.tsx` — 카드 상세·뉴스 상세는 첫 요청에 생성되는 on-demand ISR이라 그 동안 빈 화면이다
+- [ ] `global-error.tsx` — 루트 `error.tsx`만 있다
+- [ ] 도감 결과 건수 표시 — `search_cards`가 total을 주지 않는다. count를 따로 받을지 커서 방식을 유지할지 판단 필요
+- [ ] 도감 정렬 옵션 (지금은 코드순 고정). 추가하면 커서 설계를 다시 봐야 한다 (§2.7 "커서 키 ≠ 유니크 키")
+
+**C. 검색·데이터**
+
+- [ ] `name_en`이 검색에서 빠져 있다 — `search_cards`는 `name_ja`/`name_ko`만 본다
+- [ ] `effect_text` 검색 — "카드를 뽑는다"로 찾고 싶은 수요가 크고, 키워드 태깅 수작업도 줄여준다
+
+**D. 테스트 공백**
+
+- [ ] `src/lib/admin/session.ts` 무테스트 — `timingSafeEqual` 비교와 해시 쿠키 생성은 **인증의 핵심**인데 E2E의 401 확인으로만 간접 검증된다
+- [ ] `src/lib/admin/responses.ts` 무테스트 — PG 오류코드 매핑(23505/23503/23502)
+
+**E. 운영**
+
+- [ ] `db:types`가 **로컬 Docker DB**를 가리킨다. 원격에만 적용하고 타입을 뽑으면 스키마와 조용히 어긋난다 — `db:reset` → `db:migrate` → `db:types` 순서를 지킬 것
+- [ ] 나머지는 §9 참조 (사이트 URL · Node 22 · E2E 데이터 누적)
 
 ### Phase 2 — 핵심 유틸리티
 
@@ -887,11 +924,11 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
 ## 9. 미해결 — 결정이 필요한 사항
 
 1. **애드센스 심사 제출 전 준비물** — ①실제 기사 5~10편 발행(코드가 아니라 콘텐츠 문제) ②`NEXT_PUBLIC_SITE_URL`을 실제 도메인으로 교체 ③`ads.txt` 배치와 퍼블리셔 ID 입력 ④EEA 트래픽이 있으면 인증 CMP 도입. ~~플레이스홀더 페이지가 "제작 중"으로 보이는 것~~ → T1.10에서 `ComingSoon`으로 해소.
-2. **`CLAUDE.md`의 `similar_group_id` 지정** — 대체 카드 판정을 `base_code`로 바꿨으므로 `CLAUDE.md` 문구를 갱신할지, 아니면 `similar_group_id`를 별도 용도(다른 이름의 유사 효과 카드 수동 그룹)로 살릴지 정해야 한다 (§4.6).
-3. **관리자 토큰의 수명** — 지금은 토큰 1개가 곧 전체 쓰기 권한이다. 유출되면 카탈로그 전체를 조작할 수 있다. T3.1까지 이 상태를 유지할지, 더 일찍 계정 기반으로 옮길지.
-4. **일본 중고 매물 사이트 약관** (T2.7 선행) — 메르카리 · 라쿠마 · 야후옥션의 이용약관 검토 결과를 `docs/crawler-compliance.md`에 기록해야 한다. 차단 시 대체 전략(공식 API · 제휴)이 필요하다.
-5. **카드 이미지 저장 방식** — 현재는 관리자가 외부 URL을 직접 입력한다. 핫링크 대신 자체 호스팅(Supabase Storage / R2)으로 갈지, 그 경우 저작권 처리를 어떻게 할지.
-6. **비로그인 매물 검색 허용 여부** — 허용 시 IP 해시 쿼터만으로 방어해야 해 우회 여지가 커진다. 로그인 필수면 방어력은 오르나 초기 유입이 준다.
-7. **환율 갱신 주기** — 기준가 KRW 환산 스냅샷 주기(일 1회 권장).
-8. **Node 버전** — 현재 20.15.1로 테스트 툴체인 4개를 하향 고정한 상태다(§2.5). 22 LTS로 올리면 해소된다.
-9. **원격 DB의 샘플 데이터** — T1.10 디자인 확인용으로 `scripts/sample-data.ts`가 세트 2 · 카드 8 · 키워드 3 · 기사 3을 원격 DB에 넣었다. **카드명과 일러스트가 서로 맞지 않는 가짜 데이터**이므로 공개 전에 반드시 지워야 한다: `npx tsx --env-file=.env.local scripts/cleanup-sample.ts` (E2E가 남긴 `pub-*` · `draft-*` 기사도 같이 지운다).
+2. **관리자 토큰의 수명** — 지금은 토큰 1개가 곧 전체 쓰기 권한이다. 유출되면 카탈로그 전체를 조작할 수 있다. T3.1까지 이 상태를 유지할지, 더 일찍 계정 기반으로 옮길지.
+3. **일본 중고 매물 사이트 약관** (T2.7 선행) — 메르카리 · 라쿠마 · 야후옥션의 이용약관 검토 결과를 `docs/crawler-compliance.md`에 기록해야 한다. 차단 시 대체 전략(공식 API · 제휴)이 필요하다.
+4. **카드 이미지 저장 방식** — 현재는 관리자가 외부 URL을 직접 입력한다. 핫링크 대신 자체 호스팅(Supabase Storage / R2)으로 갈지, 그 경우 저작권 처리를 어떻게 할지.
+5. **비로그인 매물 검색 허용 여부** — 허용 시 IP 해시 쿼터만으로 방어해야 해 우회 여지가 커진다. 로그인 필수면 방어력은 오르나 초기 유입이 준다.
+6. **환율 갱신 주기** — 기준가 KRW 환산 스냅샷 주기(일 1회 권장).
+7. **Node 버전** — 현재 20.15.1로 테스트 툴체인 4개를 하향 고정한 상태다(§2.5). 22 LTS로 올리면 해소된다.
+8. **원격 DB의 임시 데이터** — T1.10 디자인 확인용 샘플(세트 2 · 카드 8 · 키워드 3 · 기사 3)과 E2E가 매 실행마다 남기는 카드·세트·기사가 쌓여 있다. 샘플은 **카드명과 일러스트가 서로 맞지 않는 가짜 데이터**라 공개 전에 반드시 지워야 한다. `npm run db:clean` — 접두사 + 6자리 타임스탬프 정규식으로만 골라내므로 손으로 등록한 카드는 건드리지 않는다.
+9. **E2E가 데이터를 남긴다** — 각 spec이 `beforeAll`에서 만든 카드·세트·키워드를 지우지 않아 실행할수록 원격 DB에 누적된다. 지금은 `db:clean`으로 사후 정리하지만, `afterAll`에서 스스로 지우게 하거나 테스트 전용 프로젝트를 분리하는 편이 낫다.
