@@ -1,8 +1,8 @@
 "use client";
 
-import { ImageOff } from "lucide-react";
 import Link from "next/link";
 
+import { CardImage } from "@/components/features/cards/card-image";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils/cn";
 import { cardDisplayName, type CardListItem } from "@/types/card";
@@ -26,23 +26,7 @@ function CardTile({ card }: { card: CardListItem }) {
       <Link href={`/cards/${card.id}`} className="block">
         {/* 일러스트가 주인공이다. 테두리는 얇게, 호버에만 반응한다. */}
         <div className="relative aspect-card overflow-hidden rounded-lg border bg-surface-raised transition-shadow group-hover:shadow-md">
-          {card.image_url ? (
-            // eslint-disable-next-line @next/next/no-img-element -- 원격 호스트 정책 미확정(§9.3)
-            <img
-              src={card.image_url}
-              alt={name}
-              loading="lazy"
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-            />
-          ) : (
-            // 이미지 없는 카드가 기본이다. 빈칸 대신 코드를 보여 정보로 만든다.
-            <div className="card-placeholder flex h-full w-full flex-col items-center justify-center gap-2 p-3">
-              <ImageOff className="size-5 text-muted-foreground/30" aria-hidden />
-              <span className="text-center font-mono text-[10px] break-all text-muted-foreground/60">
-                {card.code}
-              </span>
-            </div>
-          )}
+          <CardImage card={card} showCode hoverClassName="group-hover:scale-[1.03]" />
 
           {card.rarity ? (
             <span className="absolute top-2 right-2 rounded bg-foreground/85 px-1.5 py-0.5 text-[10px] font-medium text-background">

@@ -1,7 +1,6 @@
 import {
   ArrowRight,
   BookOpen,
-  ImageOff,
   Layers,
   Search,
   ShieldCheck,
@@ -9,11 +8,12 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { CardImage } from "@/components/features/cards/card-image";
 import { Button } from "@/components/ui/button";
 import { fetchCatalogStats, fetchShowcaseCards } from "@/lib/home/queries";
 import { fetchPublishedPosts } from "@/lib/news/queries";
 import { formatKoreanDate } from "@/lib/utils/date";
-import { cardDisplayName } from "@/types/card";
+import type { CardListItem } from "@/types/card";
 
 export const revalidate = 600;
 
@@ -45,7 +45,7 @@ function ShowcaseTile({
   card,
   className,
 }: {
-  card: { id: string; image_url: string | null; name_ko: string | null; name_ja: string };
+  card: CardListItem;
   className?: string;
 }) {
   return (
@@ -53,19 +53,7 @@ function ShowcaseTile({
       href={`/cards/${card.id}`}
       className={`group relative block aspect-card overflow-hidden rounded-lg border bg-surface-raised ${className ?? ""}`}
     >
-      {card.image_url ? (
-        // eslint-disable-next-line @next/next/no-img-element -- 원격 호스트 정책 미확정(§9.3)
-        <img
-          src={card.image_url}
-          alt={cardDisplayName(card)}
-          loading="lazy"
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-        />
-      ) : (
-        <div className="card-placeholder flex h-full w-full items-center justify-center">
-          <ImageOff className="size-5 text-muted-foreground/30" aria-hidden />
-        </div>
-      )}
+      <CardImage card={card} hoverClassName="group-hover:scale-105" />
     </Link>
   );
 }
