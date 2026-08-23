@@ -10,6 +10,7 @@
 
 | 버전 | 변경 |
 |------|------|
+| v8 | T1.5 결과 반영 — 마이그레이션 001 적용 완료. **§4.1-1 신설: RLS 정책만으로는 접근이 성립하지 않는다(GRANT 선행 검사)** — 로컬 리허설에서 anon SELECT와 service_role INSERT가 모두 막히고 TRUNCATE가 열려 있던 것을 발견해 revoke/grant 3단 규칙을 표준화. |
 | v7 | T1.4 결과 반영 — 환경변수를 `env.ts`(클라이언트) / `env.server.ts`(서버 시크릿, `server-only`) 2개로 분리. 단일 `env.ts`로 두면 서버 시크릿 스키마가 클라이언트 번들 경로에 노출된다. Supabase 클라이언트 3종 추가. |
 | v6 | T1.3 결과 반영 — 앱 셸 구성 완료, `next-themes` 도입으로 다크 모드 해소, `src/lib/navigation.ts` · `common/*` 목록 갱신, 플레이스홀더 페이지 4종의 대체 시점 명시, TanStack Query 프로바이더를 T1.7로 이관. |
 | v5 | T1.2 결과 반영 — §2.6 shadcn 설정 신설(base=radix / preset=nova, alias 2건 수정 사유), 프로젝트 토큰 분리 원칙, 루트 트리에서 `tailwind.config.ts` 제거(Tailwind v4 CSS-first) 후 `components.json` 추가, T1.3에 다크 모드 활성화 과제 명시. |
@@ -78,7 +79,9 @@
     "typecheck": "next typegen && tsc --noEmit", // typegen 산출물이 .next/(gitignore)라 선행 필요
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "db:reset": "supabase db reset",     // 로컬 리허설 (Docker 필요)
+    "db:migrate": "supabase db push"     // 원격 적용
   }
 }
 ```
@@ -87,7 +90,6 @@
 
 | 스크립트 | 추가 시점 |
 |----------|-----------|
-| `db:migrate`: `supabase db push` | T1.5 (마이그레이션 001) |
 | `db:seed`: `tsx scripts/seed.ts` | T1.6 (시드 스크립트) |
 | `worker:dev` / `worker:deploy`: `npm --prefix workers/crawler run …` | T2.6 (워커 스캐폴딩) |
 
@@ -483,6 +485,27 @@ market_sessions    (id, user_id NULL, ip_hash, card_id→cards,
 - `card_keywords(keyword_id, card_id)` — 키워드 교차 필터용 역방향 인덱스.
 - `market_sessions(ip_hash, requested_at DESC)`, `market_sessions(user_id, requested_at DESC)` — 쿼터 조회용.
 
+**§4.1-1 ★ RLS 정책만으로는 접근 제어가 성립하지 않는다 (T1.5 실측)**
+
+PostgreSQL은 **테이블 레벨 권한(GRANT)을 먼저 검사하고, 통과한 뒤에야 RLS 정책으로 행을 거른다.** 이 프로젝트의 기본 권한 상태에서 신규 테이블은 다음과 같았다.
+
+| 역할 | 마이그레이션 직후 기본 권한 | 결과 |
+|------|------------------------------|------|
+| `anon` / `authenticated` | `REFERENCES, TRIGGER, TRUNCATE` | SELECT 없음 → 정책이 허용해도 `42501 permission denied` |
+| `service_role` | `REFERENCES, TRIGGER, TRUNCATE` | INSERT 없음 → 시드 · 배치 수집 불가 |
+
+즉 정책만 작성하면 **도감 읽기가 전부 막히고 시드도 실패한다.** 게다가 세 역할 모두 붙어 있던 `TRUNCATE`는 **RLS를 우회**하므로 회수해야 한다.
+
+**따라서 모든 마이그레이션은 RLS 정책과 함께 다음 3종을 반드시 포함한다.**
+
+```sql
+revoke all on <테이블…> from anon, authenticated, service_role;
+grant select on <테이블…> to anon, authenticated;              -- 읽기 대상만
+grant select, insert, update, delete on <테이블…> to service_role;  -- TRUNCATE 제외
+```
+
+Reviewer는 신규 테이블마다 `revoke all` → 최소 권한 `grant` → RLS 정책 3단이 모두 있는지 확인한다.
+
 **RLS 정책 (전 테이블 필수 — CLAUDE.md: RLS enabled)**
 
 | 테이블 | 정책 |
@@ -665,7 +688,13 @@ CRAWLER_SHARED_SECRET=
   - Vitest에 더미 환경변수 주입 — `env.ts`가 모듈 로드 시 검증하므로 테스트에도 유효 값이 필요
   - 검증: `lint` ✅ / `typecheck` ✅ / `test` ✅ 18건 / `build` ✅ / `test:e2e` ✅ 4건
   - ⚠️ **실제 Supabase 자격증명 미입력 상태** — `.env.local`을 채우기 전까지 실제 연결은 검증되지 않았다. 첫 실연결 검증은 T1.5 마이그레이션에서 이뤄진다
-- [ ] **T1.5** 마이그레이션 001 — games / card_sets / similar_groups / cards / keywords / card_keywords + 인덱스 + RLS. `games`에 `ptcg` · `opcg` 2행과 게임별 룰 값(§4.0) 투입
+- [x] **T1.5** 마이그레이션 001 — 완료 (로컬 리허설 후 원격 적용 · 검증)
+  - `supabase/migrations/20260823000001_card_master.sql` — 테이블 6개 · 인덱스 9개 · RLS 정책 6개 · 트리거 2개 · 게임 룰 2행
+  - `supabase init` + 원격 link(`rqduciqmfvkpvtezzfwu`, PG 17.6, ap-northeast-2), `db:reset` / `db:migrate` 스크립트 등록
+  - 로컬 검증: search_vector 트리거(한국어 토큰화) · updated_at 트리거 · 복합 FK 게임 혼입 차단 · anon 읽기 허용 / 쓰기 거부 · service_role 쓰기 허용
+  - 원격 검증: `games` 2행 조회 200 / `cards` 조회 200 / anon INSERT 42501 거부
+  - ⚠️ **GRANT 누락 버그를 로컬 리허설에서 발견** — 아래 §4.1-1 참조
+- [ ] **T1.5a** (권장) 로컬 스택 상시 사용 — Docker Desktop 설치 완료. 이후 모든 마이그레이션은 `npm run db:reset`으로 리허설한 뒤 `db:migrate`한다
 - [ ] **T1.6** `scripts/seed.ts` + 초기 카드 데이터 투입 — 게임별로 분리
   - T1.6a 포켓몬: 공개 API 조사 후 수집 (API 가용 시 자동화)
   - T1.6b 원피스: 공식 공개 API 부재 예상 → 수집 방식 결정 필요 (§9.2)
