@@ -18,9 +18,7 @@ test.describe("앱 셸", () => {
     await page.getByRole("link", { name: "카드 도감" }).first().click();
 
     await expect(page).toHaveURL(/\/cards$/);
-    await expect(
-      page.getByRole("heading", { name: "카드 도감 준비 중" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "카드 도감" })).toBeVisible();
   });
 
   test("하위 페이지 타이틀에 템플릿이 적용된다", async ({ page }) => {

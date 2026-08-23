@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
 
 import { Footer } from "@/components/common/footer";
 import { Header } from "@/components/common/header";
 import { ThemeProvider } from "@/components/common/theme-provider";
+import { QueryProvider } from "@/lib/query/provider";
 
 import "./globals.css";
 
@@ -40,9 +42,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           enableSystem
           disableTransitionOnChange
         >
-          <Header />
-          <main className="flex-1">{children}</main>
-          <Footer />
+          <NuqsAdapter>
+            <QueryProvider>
+              <Header />
+              <main className="flex-1">{children}</main>
+              <Footer />
+            </QueryProvider>
+          </NuqsAdapter>
         </ThemeProvider>
       </body>
     </html>

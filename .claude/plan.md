@@ -10,6 +10,7 @@
 
 | 버전 | 변경 |
 |------|------|
+| v12 | T1.7 완료 — 도감 검색·무한스크롤. §4.4에 T1.7 실측 메모 신설: 일본어는 tsvector가 아닌 ilike+trgm으로 검색해야 하고, Supabase 클라이언트는 Next 런타임에서만 동작하며, nuqs는 Suspense 경계가 필요하다. 레어도·속성·팩·키워드 필터는 facets 선행이 필요해 T1.7b로 분리. |
 | v11 | T1.6a 완료 — ptcg 일본어 12,619장 적재. 003(card_sets nullability, 002에서 누락분) 추가 적용. §4.4에 실측 메모 신설: TCGdex 일본어 카드에 **이미지가 없고**, `energyType`은 `"Normal"`=기본이며, GraphQL은 언어 인자가 없다. |
 | v10 | T1.5b 완료 — 마이그레이션 002 적용. cards 이름 컬럼 nullability를 §4.4 실측에 맞게 교정하고 일본어명 trigram 인덱스 추가. §4.1 데이터 모델 · 인덱스 설명을 실제 스키마와 일치시킴. |
 | v9 | **카드 데이터 원천 확정 (§4.4 신설, 실측 기반)** — ptcg 일본어는 TCGdex(12,619장), opcg는 공식 사이트 스크래핑. 한국어는 두 게임 모두 부분 커버리지. **`name_ko not null` / `name_ja` nullable이 정반대임을 발견** → T1.5b(마이그레이션 002)로 교정. T1.6을 5개 하위 태스크로 분해. §9.2 해소. |
@@ -584,6 +585,14 @@ Reviewer는 신규 테이블마다 `revoke all` → 최소 권한 `grant` → RL
 
 **표기 규칙:** UI는 `name_ko ?? name_ja`로 표시하고, 한국어명이 없으면 일본어명을 그대로 노출한다. 별도 번역을 생성하지 않는다.
 
+#### T1.7 실측 메모
+
+| 항목 | 실측 | 대응 |
+|------|------|------|
+| **일본어 전문검색** | `simple` 사전은 공백으로 토큰을 나눈다. 일본어는 공백이 없어 카드명 전체가 토큰 1개가 되고, 부분일치가 안 된다 | 검색은 `search_vector`가 아니라 **`ilike` + pg_trgm 인덱스**로 처리한다. `name_ja`/`name_ko`를 `or`로 묶는다 |
+| **Supabase 클라이언트 런타임** | 순수 Node 20.15에서는 `createServerClient`가 WebSocket 부재로 실패하지만, **Next 런타임(dev·build)에서는 정상 동작**한다(undici 번들) | 앱 코드는 `@/lib/supabase/*`를 그대로 쓴다. **독립 실행 스크립트만** PostgREST 직접 호출이 필요하다 |
+| **nuqs + 정적 프리렌더** | `useSearchParams`를 쓰는 컴포넌트는 Suspense 경계가 없으면 `next build`의 프리렌더에서 실패한다(dev에서는 드러나지 않음) | 도감 페이지에서 `<Suspense>`로 감싼다 |
+
 #### T1.6a 실측 메모 (수집 중 확인)
 
 | 항목 | 실측 | 대응 |
@@ -777,7 +786,13 @@ CRAWLER_SHARED_SECRET=
   - T1.6c opcg 일본어: `onepiece-cardgame.com` 스크래핑
   - T1.6d opcg 한국어: `onepiece-cardgame.kr` 스크래핑 (2024-03 이후 세트만 존재)
   - T1.6e 효과 키워드 자동 태깅 + 수동 보정
-- [ ] **T1.7** `GET /api/cards` + 도감 페이지 (필터 패널 · nuqs URL 동기화 · 무한스크롤)
+- [x] **T1.7** `GET /api/cards` + 도감 페이지 — 완료
+  - `src/lib/validation/card.ts`(검색 파라미터 zod, 테스트 8건) · `app/api/cards/route.ts`(커서 페이지네이션, limit 상한 100)
+  - TanStack Query 프로바이더 + nuqs 어댑터를 루트 레이아웃에 연결 (T1.3에서 이관한 항목)
+  - `features/cards/`: card-browser · card-filter-panel · card-grid · use-card-search(무한스크롤)
+  - 검증: `lint` `typecheck` `build` ✅ / `test` 40건 ✅ / `test:e2e` 9건 ✅ (도감 5건 신규 — 목록·검색·URL 복원·빈 결과·무한스크롤)
+  - **미포함(후속)**: 레어도 · 속성 · 발매 팩 · 효과 키워드 필터 → **T1.7b**. PostgREST가 DISTINCT를 지원하지 않아 facets용 RPC/뷰가 선행 필요하다. 효과 키워드는 T1.6e 태깅 이후에나 의미가 있다
+- [ ] **T1.7b** 필터 확장 — facets RPC(또는 뷰) + 레어도 · 속성 · 발매 팩 · 키워드 필터
 - [ ] **T1.8** 카드 상세 + `base-price-badge` + `similar-cards`(대체 카드 그룹)
 - [ ] **T1.9** 뉴스 모듈: 마이그레이션 + 목록 / 상세(ISR) + `sitemap.ts` / `robots.ts` + 개인정보처리방침 · 면책 페이지 (애드센스 심사 요건)
 
