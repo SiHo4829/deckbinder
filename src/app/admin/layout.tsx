@@ -20,6 +20,9 @@ export default function AdminLayout({ children }: Readonly<{ children: ReactNode
         <Link href="/admin/cards/new" className="hover:underline">
           카드 등록
         </Link>
+        <Link href="/admin/news" className="hover:underline">
+          뉴스
+        </Link>
       </nav>
       {children}
     </div>

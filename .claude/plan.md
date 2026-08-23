@@ -82,7 +82,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "db:reset": "supabase db reset",              // 로컬 리허설 (Docker 필요)
-    "db:migrate": "supabase db push"              // 원격 적용
+    "db:migrate": "supabase db push",             // 원격 적용
+    "db:types": "supabase gen types typescript …" // 스키마 변경 후 필수
   }
 }
 ```
@@ -158,6 +159,8 @@ shadcn CLI 4.19에서 `-b/--base` 플래그의 의미가 **base color → primit
 | **PostgREST 행 상한** | `limit=100000`을 보내도 서버 설정(`db-max-rows`, 기본 **1000**)에서 잘린다. 에러 없이 잘리므로 대조·집계가 **틀린 결과를 조용히 낸다** | 1000행을 넘길 수 있는 조회는 `Range` 헤더로 페이지네이션한다 |
 | **Supabase 클라이언트 런타임** | 순수 Node 20.15에서 `createServerClient`/`createClient`가 네이티브 WebSocket 부재로 **즉시 실패**한다. Next 런타임(dev·build)은 undici를 번들해서 정상 동작한다 | 앱 코드는 `@/lib/supabase/*` 그대로 사용. **독립 실행 스크립트**는 PostgREST를 직접 호출한다 |
 | **일본어 전문검색** | `simple` 사전은 공백으로 토큰을 나눈다. 일본어에는 공백이 없어 카드명 전체가 토큰 1개가 되고 **부분일치가 전혀 안 된다** | 검색은 `search_vector`가 아니라 **`ilike` + `pg_trgm` 인덱스**로 한다. `name_ja`/`name_ko`를 `or`로 묶는다 |
+| **`cookies()` → 강제 동적 렌더링** | `createSupabaseServerClient()`는 `await cookies()`를 호출한다. `cookies()`는 Request-time API라 **이를 쓰는 세그먼트는 정적 생성·ISR이 성립하지 않는다.** `revalidate`를 붙여도 무시된다 | 공개 읽기(뉴스 · 카드 상세 · sitemap)는 쿠키를 읽지 않는 `createSupabaseAnonClient()`(`src/lib/supabase/public.ts`)를 쓴다. anon 키라 RLS는 그대로 적용된다 |
+| **동적 라우트의 기본은 Dynamic** | `generateStaticParams`가 **없으면** 동적 라우트는 요청마다 렌더된다. 빌드 출력의 `ƒ`가 그 신호다 | 빌드 시 전부 생성하고 싶지 않으면 **빈 배열을 반환**한다. `dynamicParams`(기본 true)로 첫 요청에 생성 후 캐시된다(`●`) |
 | **DB 타입 미생성** | 타입 없이 쓰면 Supabase가 임베드 관계를 **배열로 추론**하지만 런타임은 객체다. 컬럼이 아닌 필드를 insert/update에 넘겨도 잡히지 않는다(실제로 PATCH가 `keyword_ids`를 넘기고 있었다) | `npx supabase gen types typescript --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres > src/types/database.ts`. **스키마를 바꾸면 다시 생성한다** |
 | **nuqs 배열 직렬화** | 배열 파라미터를 **쉼표로 직렬화**한다(`keywords=a,b`). 반복 키(`keywords=a&keywords=b`)로 보내면 첫 값만 읽어 **필터가 조용히 일부만 적용**된다 | 키워드 코드를 `^[a-z0-9_]+$`로 제한해 쉼표가 값에 들어갈 수 없게 막았다. 서버 파서는 두 형식을 모두 받는다 |
 | **`useSearchParams` + 정적 프리렌더** | Suspense 경계가 없으면 `next build`가 실패한다. **dev와 E2E는 통과**해서 빌드까지 돌리지 않으면 놓친다 | nuqs를 쓰는 컴포넌트를 `<Suspense>`로 감싼다 |
@@ -500,8 +503,12 @@ collection_items   (id, user_id→profiles, card_id→cards, quantity,
 binder_shares      (id, user_id→profiles, slug UNIQUE, title, is_active, view_count)
 
 ── 콘텐츠 ───────────────────────────────────
-news_posts         (id, slug UNIQUE, title, summary, content_md,
-                    thumbnail_url, author_id, published_at)
+news_posts         (id, slug UNIQUE check '^[a-z0-9][a-z0-9-]*$',
+                    title, summary, content_md, thumbnail_url,
+                    author_name,          -- profiles FK는 T3.1에서 승격
+                    published_at,         -- null=초안, 과거=공개, 미래=예약
+                    created_at, updated_at)
+                    -- 초안 차단은 RLS가 한다. 앱 쿼리에서 조건을 빠뜨려도 새지 않는다.
 
 ── 운영/방어 ────────────────────────────────
 market_sessions    (id, user_id NULL, ip_hash, card_id→cards,
@@ -658,6 +665,8 @@ OP17-001_p2   루피 (SEC)
 | POST / DELETE | `/api/admin/session` | 토큰 로그인 / 로그아웃 |
 | POST | `/api/admin/sets` | 세트 등록 |
 | POST | `/api/admin/keywords` | 효과 키워드 등록 |
+| POST | `/api/admin/news` | 뉴스 작성 |
+| PATCH · DELETE | `/api/admin/news/:postId` | 뉴스 수정(발행 토글 포함) · 삭제 |
 | POST | `/api/admin/cards` | 카드 등록 |
 | PATCH / DELETE | `/api/admin/cards/:cardId` | 카드 수정 · 삭제 |
 
@@ -726,6 +735,7 @@ SUPABASE_SERVICE_ROLE_KEY=        # 서버 전용. NEXT_PUBLIC_ 접두사 금지
 NEXT_PUBLIC_SITE_URL=
 
 ADMIN_TOKEN=                      # 관리자 화면(16자 이상). T3.1 정식 인증 전까지 임시
+NEXT_PUBLIC_ADSENSE_CLIENT=       # 애드센스 승인 후. 없으면 광고를 렌더하지 않는다
 
 SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런타임 미사용
 
@@ -786,7 +796,13 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
   - **DB 타입 생성 도입** — `src/types/database.ts` + 3개 클라이언트에 `Database` 제네릭 연결
   - 검증: `test` 44건 ✅ / `test:e2e` 24건 ✅ (상세 5건 신규)
   - `card_prices`가 아직 없어(T2.8) 기준가는 항상 "산출 불가"다
-- [ ] **T1.9** 뉴스 모듈 — 목록/상세(ISR) · `sitemap.ts` · `robots.ts` · 개인정보처리방침 · 면책 (애드센스 심사 요건)
+- [x] **T1.9** 뉴스 모듈 · SEO · 애드센스 요건 — 완료
+  - 마이그레이션 006: `news_posts` (초안 차단을 RLS에서 처리) + GRANT 3단
+  - 뉴스 목록/상세 **ISR** · `react-markdown`+`remark-gfm` · 관리자 작성/수정/발행토글/삭제
+  - `sitemap.ts`(PostgREST 1000행 페이지네이션) · `robots.ts` · `metadataBase`+OG
+  - 개인정보처리방침(애드센스 필수 고지 포함) · 면책 조항 · 푸터 링크 · `AdSlot`(ID 없으면 미렌더)
+  - **부수 수정**: `cookies()` 때문에 동적이던 `/cards/[cardId]`를 익명 클라이언트+`generateStaticParams`로 전환 → SSG
+  - 검증: `test` 66건 ✅ / `test:e2e` 39건 ✅ / `build`에서 `/news` `○ 5m`, `/news/[slug]` `●`, `/cards/[cardId]` `●` 확인
 
 **관리자 화면 후속** (T1.6-A에서 미포함)
 
@@ -827,10 +843,11 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
 
 ## 9. 미해결 — 결정이 필요한 사항
 
-1. **`CLAUDE.md`의 `similar_group_id` 지정** — 대체 카드 판정을 `base_code`로 바꿨으므로 `CLAUDE.md` 문구를 갱신할지, 아니면 `similar_group_id`를 별도 용도(다른 이름의 유사 효과 카드 수동 그룹)로 살릴지 정해야 한다 (§4.6).
-2. **관리자 토큰의 수명** — 지금은 토큰 1개가 곧 전체 쓰기 권한이다. 유출되면 카탈로그 전체를 조작할 수 있다. T3.1까지 이 상태를 유지할지, 더 일찍 계정 기반으로 옮길지.
-3. **일본 중고 매물 사이트 약관** (T2.7 선행) — 메르카리 · 라쿠마 · 야후옥션의 이용약관 검토 결과를 `docs/crawler-compliance.md`에 기록해야 한다. 차단 시 대체 전략(공식 API · 제휴)이 필요하다.
-4. **카드 이미지 저장 방식** — 현재는 관리자가 외부 URL을 직접 입력한다. 핫링크 대신 자체 호스팅(Supabase Storage / R2)으로 갈지, 그 경우 저작권 처리를 어떻게 할지.
-5. **비로그인 매물 검색 허용 여부** — 허용 시 IP 해시 쿼터만으로 방어해야 해 우회 여지가 커진다. 로그인 필수면 방어력은 오르나 초기 유입이 준다.
-6. **환율 갱신 주기** — 기준가 KRW 환산 스냅샷 주기(일 1회 권장).
-7. **Node 버전** — 현재 20.15.1로 테스트 툴체인 4개를 하향 고정한 상태다(§2.5). 22 LTS로 올리면 해소된다.
+1. **애드센스 심사 제출 전 준비물** — ①실제 기사 5~10편 발행(코드가 아니라 콘텐츠 문제) ②`NEXT_PUBLIC_SITE_URL`을 실제 도메인으로 교체 ③`ads.txt` 배치와 퍼블리셔 ID 입력 ④EEA 트래픽이 있으면 인증 CMP 도입. 플레이스홀더 페이지(`/decks` `/binder`)가 "제작 중"으로 보이는 것도 반려 사유가 된다.
+2. **`CLAUDE.md`의 `similar_group_id` 지정** — 대체 카드 판정을 `base_code`로 바꿨으므로 `CLAUDE.md` 문구를 갱신할지, 아니면 `similar_group_id`를 별도 용도(다른 이름의 유사 효과 카드 수동 그룹)로 살릴지 정해야 한다 (§4.6).
+3. **관리자 토큰의 수명** — 지금은 토큰 1개가 곧 전체 쓰기 권한이다. 유출되면 카탈로그 전체를 조작할 수 있다. T3.1까지 이 상태를 유지할지, 더 일찍 계정 기반으로 옮길지.
+4. **일본 중고 매물 사이트 약관** (T2.7 선행) — 메르카리 · 라쿠마 · 야후옥션의 이용약관 검토 결과를 `docs/crawler-compliance.md`에 기록해야 한다. 차단 시 대체 전략(공식 API · 제휴)이 필요하다.
+5. **카드 이미지 저장 방식** — 현재는 관리자가 외부 URL을 직접 입력한다. 핫링크 대신 자체 호스팅(Supabase Storage / R2)으로 갈지, 그 경우 저작권 처리를 어떻게 할지.
+6. **비로그인 매물 검색 허용 여부** — 허용 시 IP 해시 쿼터만으로 방어해야 해 우회 여지가 커진다. 로그인 필수면 방어력은 오르나 초기 유입이 준다.
+7. **환율 갱신 주기** — 기준가 KRW 환산 스냅샷 주기(일 1회 권장).
+8. **Node 버전** — 현재 20.15.1로 테스트 툴체인 4개를 하향 고정한 상태다(§2.5). 22 LTS로 올리면 해소된다.

@@ -28,6 +28,8 @@ const clientSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.url(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
   NEXT_PUBLIC_SITE_URL: z.url(),
+  // 애드센스 승인 후에 채운다. 없으면 광고를 렌더하지 않는다.
+  NEXT_PUBLIC_ADSENSE_CLIENT: z.string().optional(),
 });
 
 // Next는 NEXT_PUBLIC_* 를 빌드 시 리터럴로 치환한다.
@@ -38,6 +40,7 @@ export const clientEnv = parseEnv(
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+    NEXT_PUBLIC_ADSENSE_CLIENT: process.env.NEXT_PUBLIC_ADSENSE_CLIENT,
   },
   "클라이언트 환경변수",
 );

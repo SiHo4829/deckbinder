@@ -8,7 +8,21 @@ import { SimilarCards } from "@/components/features/cards/similar-cards";
 import { fetchCardAlternatives, fetchCardDetail } from "@/lib/cards/queries";
 import { cardDisplayName } from "@/types/card";
 
-// 서버 컴포넌트로 직접 조회한다. 도감 상세는 색인 대상이므로 RSC가 맞다 (CLAUDE.md).
+// 도감 상세는 색인 대상이다. 카드가 많아 빌드 시 전부 생성하지는 않고,
+// 첫 요청에서 렌더한 뒤 캐시한다(on-demand ISR).
+export const revalidate = 3600;
+
+/**
+ * 빈 배열을 반환해 빌드 시에는 아무것도 생성하지 않는다.
+ * generateStaticParams 자체가 없으면 동적 라우트는 요청마다 렌더되지만,
+ * 있으면 dynamicParams(기본 true)로 첫 요청에 생성한 뒤 캐시된다.
+ * 카드가 수천 장이 될 수 있어 빌드 시간을 늘리지 않으려는 선택이다.
+ */
+export function generateStaticParams() {
+  return [];
+}
+
+// 서버 컴포넌트로 직접 조회한다 (CLAUDE.md: RSC 기본).
 export async function generateMetadata(
   props: PageProps<"/cards/[cardId]">,
 ): Promise<Metadata> {

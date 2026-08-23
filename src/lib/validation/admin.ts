@@ -52,6 +52,27 @@ export const keywordInputSchema = z.object({
 
 export type KeywordInput = z.infer<typeof keywordInputSchema>;
 
+export const newsPostInputSchema = z.object({
+  // URL 경로에 그대로 쓰인다. DB의 check 제약과 같은 형식이어야 한다.
+  slug: required("슬러그").regex(
+    /^[a-z0-9][a-z0-9-]*$/,
+    "슬러그는 소문자·숫자·하이픈만 쓸 수 있고 하이픈으로 시작할 수 없습니다.",
+  ),
+  title: required("제목"),
+  summary: optional,
+  content_md: required("본문"),
+  thumbnail_url: optionalUrl,
+  author_name: optional,
+  /** published_at으로 변환한다 (src/lib/news/publish.ts) */
+  published: z
+    .union([z.boolean(), z.literal("true"), z.literal("false")])
+    .nullish()
+    .default(false)
+    .transform((v) => v === true || v === "true"),
+});
+
+export type NewsPostInput = z.infer<typeof newsPostInputSchema>;
+
 export const cardInputSchema = z.object({
   game_id: z.uuid(),
   set_id: z

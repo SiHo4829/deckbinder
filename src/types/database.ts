@@ -255,6 +255,45 @@ export type Database = {
           },
         ]
       }
+      news_posts: {
+        Row: {
+          author_name: string | null
+          content_md: string
+          created_at: string
+          id: string
+          published_at: string | null
+          slug: string
+          summary: string | null
+          thumbnail_url: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          author_name?: string | null
+          content_md: string
+          created_at?: string
+          id?: string
+          published_at?: string | null
+          slug: string
+          summary?: string | null
+          thumbnail_url?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          author_name?: string | null
+          content_md?: string
+          created_at?: string
+          id?: string
+          published_at?: string | null
+          slug?: string
+          summary?: string | null
+          thumbnail_url?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       similar_groups: {
         Row: {
           created_at: string

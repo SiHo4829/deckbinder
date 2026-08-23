@@ -12,6 +12,13 @@ interface Options<T> {
   empty: T;
   initial?: Partial<T>;
   endpoint: string;
+  /** 수정 폼은 PATCH를 쓴다. */
+  method?: "POST" | "PATCH";
+  /**
+   * 저장 성공 후 폼을 비울지. 등록 폼은 비우는 게 맞지만
+   * 수정 폼에서 비우면 방금 고친 내용이 사라진다.
+   */
+  resetOnSuccess?: boolean;
   /** 폼 필드가 아닌 값을 함께 보낼 때 쓴다 (예: 키워드 id 배열). */
   extra?: () => Record<string, unknown>;
   /** 저장 성공 시 안내 문구 */
@@ -32,6 +39,8 @@ export function useAdminForm<T extends Record<string, string>>({
   empty,
   initial,
   endpoint,
+  method = "POST",
+  resetOnSuccess = true,
   extra,
   successText,
   keepOnSuccess,
@@ -58,7 +67,7 @@ export function useAdminForm<T extends Record<string, string>>({
     let res: Response;
     try {
       res = await fetch(endpoint, {
-        method: "POST",
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...values, ...(extra?.() ?? {}) }),
       });
@@ -77,7 +86,9 @@ export function useAdminForm<T extends Record<string, string>>({
     }
 
     setStatus({ kind: "ok", text: successText(values) });
-    setValues((prev) => ({ ...empty, ...(keepOnSuccess?.(prev) ?? {}) }));
+    if (resetOnSuccess) {
+      setValues((prev) => ({ ...empty, ...(keepOnSuccess?.(prev) ?? {}) }));
+    }
     setPending(false);
     onSuccess?.();
   }

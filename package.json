@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "db:reset": "supabase db reset",
-    "db:migrate": "supabase db push"
+    "db:migrate": "supabase db push",
+    "db:types": "supabase gen types typescript --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres > src/types/database.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
@@ -27,6 +28,8 @@
     "radix-ui": "^1.6.7",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "server-only": "^0.0.1",
     "shadcn": "^4.19.0",
     "tailwind-merge": "^3.6.0",

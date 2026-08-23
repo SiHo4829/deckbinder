@@ -10,3 +10,10 @@ export const mainNav: NavItem[] = [
   { href: "/binder", label: "내 바인더" },
   { href: "/news", label: "뉴스" },
 ];
+
+/** 푸터. 정책 페이지는 애드센스 심사상 모든 페이지에서 접근 가능해야 한다. */
+export const footerNav: NavItem[] = [
+  { href: "/news", label: "뉴스" },
+  { href: "/privacy", label: "개인정보처리방침" },
+  { href: "/disclaimer", label: "면책 조항" },
+];

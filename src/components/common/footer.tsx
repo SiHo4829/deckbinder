@@ -1,14 +1,32 @@
+import Link from "next/link";
+
+import { footerNav } from "@/lib/navigation";
+
 export function Footer() {
   return (
     <footer className="mt-auto border-t">
       <div className="mx-auto w-full max-w-6xl px-4 py-8">
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          본 서비스는 공식 포켓몬 · 원피스 TCG 유통사와 연관이 없는 팬 메이드
-          서포팅 툴입니다. 제공되는 중고 매물 시세 및 정보는 외부 거래
-          플랫폼의 데이터를 파싱한 것으로, 실제 거래 결과 및 구매 행위에 대한
-          책임을 지지 않습니다.
+        <nav aria-label="사이트 정보" className="flex flex-wrap gap-x-4 gap-y-2">
+          {footerNav.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+
+        <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
+          공식 포켓몬 · 원피스 TCG 유통사와 무관한 팬 메이드 서포팅 툴입니다. 표시되는
+          시세는 참고값이며 실제 거래를 보증하지 않습니다.{" "}
+          <Link href="/disclaimer" className="underline underline-offset-2">
+            자세히
+          </Link>
         </p>
-        <p className="mt-4 text-xs text-muted-foreground">
+
+        <p className="mt-3 text-xs text-muted-foreground">
           © {new Date().getFullYear()} DeckBinder
         </p>
       </div>

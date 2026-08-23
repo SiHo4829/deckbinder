@@ -1,14 +1,16 @@
 import "server-only";
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAnonClient } from "@/lib/supabase/public";
 import type { CardDetail, CardListItem } from "@/types/card";
 
+// 쿠키를 읽지 않는 익명 클라이언트를 쓴다. server.ts(cookies 사용)를 쓰면
+// 세그먼트가 강제로 동적 렌더링되어 ISR·정적 생성이 성립하지 않는다.
 const DETAIL_COLUMNS =
   "id,code,base_code,name_ko,name_ja,name_en,rarity,attribute,card_type,sub_type,image_url,effect_text,set_id,game_id";
 
 /** 상세 페이지용 카드 1건. 없으면 null. */
 export async function fetchCardDetail(cardId: string): Promise<CardDetail | null> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAnonClient();
 
   const { data, error } = await supabase
     .from("cards")
@@ -46,7 +48,7 @@ export async function fetchCardDetail(cardId: string): Promise<CardDetail | null
 export async function fetchCardAlternatives(
   card: Pick<CardDetail, "id" | "game_id" | "base_code">,
 ): Promise<CardListItem[]> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAnonClient();
 
   const { data } = await supabase
     .from("cards")
