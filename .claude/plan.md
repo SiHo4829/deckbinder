@@ -10,6 +10,8 @@
 
 | 버전 | 변경 |
 |------|------|
+| v10 | T1.5b 완료 — 마이그레이션 002 적용. cards 이름 컬럼 nullability를 §4.4 실측에 맞게 교정하고 일본어명 trigram 인덱스 추가. §4.1 데이터 모델 · 인덱스 설명을 실제 스키마와 일치시킴. |
+| v9 | **카드 데이터 원천 확정 (§4.4 신설, 실측 기반)** — ptcg 일본어는 TCGdex(12,619장), opcg는 공식 사이트 스크래핑. 한국어는 두 게임 모두 부분 커버리지. **`name_ko not null` / `name_ja` nullable이 정반대임을 발견** → T1.5b(마이그레이션 002)로 교정. T1.6을 5개 하위 태스크로 분해. §9.2 해소. |
 | v8 | T1.5 결과 반영 — 마이그레이션 001 적용 완료. **§4.1-1 신설: RLS 정책만으로는 접근이 성립하지 않는다(GRANT 선행 검사)** — 로컬 리허설에서 anon SELECT와 service_role INSERT가 모두 막히고 TRUNCATE가 열려 있던 것을 발견해 revoke/grant 3단 규칙을 표준화. |
 | v7 | T1.4 결과 반영 — 환경변수를 `env.ts`(클라이언트) / `env.server.ts`(서버 시크릿, `server-only`) 2개로 분리. 단일 `env.ts`로 두면 서버 시크릿 스키마가 클라이언트 번들 경로에 노출된다. Supabase 클라이언트 3종 추가. |
 | v6 | T1.3 결과 반영 — 앱 셸 구성 완료, `next-themes` 도입으로 다크 모드 해소, `src/lib/navigation.ts` · `common/*` 목록 갱신, 플레이스홀더 페이지 4종의 대체 시점 명시, TanStack Query 프로바이더를 T1.7로 이관. |
@@ -436,7 +438,9 @@ games              (id, code'ptcg|opcg', name_ko, name_ja,
 card_sets          (id, game_id→games, code, name_ko, name_ja, released_at)
 similar_groups     (id, game_id, name, role_note)   -- 대체 카드 그룹
 cards              (id, game_id, set_id→card_sets, code,
-                    name_ko, name_ja, name_en,
+                    name_ja NOT NULL,      -- 크롤러 검색 키 (§4.4, 002에서 교정)
+                    name_ko NULL,          -- 커버리지 부분적. 표기는 coalesce(name_ko, name_ja)
+                    name_en NULL,
                     rarity, attribute, card_type, sub_type, image_url,
                     effect_text,
                     similar_group_id→similar_groups NULL,   -- ★ CLAUDE.md 지정 FK
@@ -480,7 +484,7 @@ market_sessions    (id, user_id NULL, ip_hash, card_id→cards,
 **인덱스 / 검색**
 
 - `cards.search_vector` — GIN. `name_ko/ja/en + effect_text` 대상 `tsvector`, 트리거로 갱신.
-- 한글 부분일치 보강: `pg_trgm` GIN 인덱스를 `cards.name_ko`에 추가.
+- 부분일치 보강: `pg_trgm` GIN 인덱스를 `cards.name_ko`와 **`cards.name_ja`** 양쪽에 둔다. 실데이터 대부분이 일본어명에 쌓이므로 일본어 인덱스가 실질적으로 더 중요하다 (002).
 - `cards(similar_group_id)` — 대체 카드 조회용.
 - `card_keywords(keyword_id, card_id)` — 키워드 교차 필터용 역방향 인덱스.
 - `market_sessions(ip_hash, requested_at DESC)`, `market_sessions(user_id, requested_at DESC)` — 쿼터 조회용.
@@ -536,6 +540,61 @@ Reviewer는 신규 테이블마다 `revoke all` → 최소 권한 `grant` → RL
 4. 환율 스냅샷 적용 → `base_price_krw`
 5. `sample_size < 3` 이면 **"기준가 산출 불가"** 로 표기 — 추정치를 노출하지 않는다
 6. UI 노출은 `base-price-badge.tsx` 단일 컴포넌트로 통일. 변동률 · 스파크라인 · 차트 컴포넌트를 만들지 않는다
+
+
+### 4.4 카드 데이터 원천 (T1.6 확정 · 2026-08-23 실측)
+
+각 후보를 직접 호출해 측정한 결과다. 문서가 아니라 응답 기준이다.
+
+#### 포켓몬 (`ptcg`)
+
+| 원천 | 측정값 | 판정 |
+|------|--------|------|
+| **TCGdex** `api.tcgdex.net/v2/ja` | 카드 **12,619**장 / 세트 183개, 최신 M5(메가) 시대까지 | ✅ **일본어 주 원천** |
+| TCGdex `/v2/ko` | 카드 **239**장 / 세트 95개 — 세트 메타데이터만 있고 카드가 비어 있는 세트가 대부분(SV3a·SV1a·SV2P 모두 0장) | ❌ 한국어 원천으로 사용 불가 |
+| TCGdex `/v2/en` | 카드 23,546장 (참고용) | — |
+| `pokemoncard.co.kr` (공식 한국) | HTTP 200, 서버 렌더링 HTML | ⚠️ 한국어 보완 원천 (스크래핑 필요) |
+
+* TCGdex는 **API 키 불필요 · 명시적 rate limit 없음**. 다만 "과하게 호출하지 말고 로컬에 캐시하라"는 방침이므로 수집은 1회 벌크 후 DB 적재로 끝낸다.
+* 이미지는 `assets.tcgdex.net`에 별도 호스팅되며 화질/포맷을 URL로 지정한다(`high.webp` 등).
+
+#### 원피스 (`opcg`)
+
+| 원천 | 측정값 | 판정 |
+|------|--------|------|
+| `onepiece-cardgame.com` (공식 일본) | HTTP 200, 8개 언어 제공(한국어 포함). 필터·페이지네이션은 클라이언트 JS | ✅ **일본어 주 원천** (스크래핑) |
+| **`onepiece-cardgame.kr`** (공식 한국) | HTTP 200, 서버 렌더링 HTML. 반다이남코코리아 한글판 **2024-03-22 발매** | ✅ **한국어 원천** (스크래핑) |
+| `apitcg.com` | One Piece 지원하나 **API 키 등록 필수** | 🔄 스크래핑 실패 시 대안 |
+| `optcgapi.com` | 엔드포인트 404 | ❌ |
+
+* 두 공식 사이트 모두 `robots.txt`가 없다(404). 크롤 금지 명시는 없으나 **이용약관 검토는 별도로 필요**하며 결과를 `docs/crawler-compliance.md`에 기록한다.
+* 한글판이 2024-03 시작이므로 **그 이전 세트에는 한국어 이름이 존재하지 않는다.**
+
+#### ★ 스키마에 미치는 결정적 영향
+
+마이그레이션 001은 `name_ko`를 `not null`, `name_ja`를 nullable로 정의했다. **실측 결과 이는 정반대다.**
+
+| 컬럼 | 001 정의 | 실제 필요 | 근거 |
+|------|----------|-----------|------|
+| `name_ja` | nullable | **`not null`** | 크롤러가 메르카리·라쿠마·야후옥션 검색어로 쓰는 유일한 키. 없으면 §5.3 매물 조회가 성립하지 않는다 |
+| `name_ko` | `not null` | **nullable** | 포켓몬은 API 커버리지 2%, 원피스는 2024-03 이전 세트에 한국어판 자체가 없다 |
+
+`name_ko not null`을 유지하면 **포켓몬 카드의 98%를 적재할 수 없다.** 마이그레이션 002로 교정한다(T1.5b).
+
+**표기 규칙:** UI는 `name_ko ?? name_ja`로 표시하고, 한국어명이 없으면 일본어명을 그대로 노출한다. 별도 번역을 생성하지 않는다.
+
+#### T1.6 수집 전략
+
+| 단계 | 대상 | 방식 |
+|------|------|------|
+| T1.6a | ptcg 일본어 | TCGdex 벌크 수집 → `cards`(name_ja, effect_text, rarity, image_url) |
+| T1.6b | ptcg 한국어 | `pokemoncard.co.kr` 스크래핑 → 카드 코드로 매칭해 `name_ko` 갱신 |
+| T1.6c | opcg 일본어 | `onepiece-cardgame.com` 스크래핑 |
+| T1.6d | opcg 한국어 | `onepiece-cardgame.kr` 스크래핑 → `name_ko` 갱신 (2024-03 이후 세트만) |
+| T1.6e | 키워드 태깅 | `effect_text` 정규식 규칙으로 `card_keywords` 1차 자동 부여 후 수동 보정 |
+
+> **이미지 저작권(§9.3 연계):** 카드 이미지는 각 유통사 저작물이다. 핫링크 대신 자체 캐싱을 하더라도 저작권 문제는 남는다. `docs/crawler-compliance.md`에 이미지 사용 방침을 명시하고, 최악의 경우 이미지 없이 텍스트 정보만 제공하는 폴백을 유지한다.
+
 
 ---
 
@@ -695,9 +754,16 @@ CRAWLER_SHARED_SECRET=
   - 원격 검증: `games` 2행 조회 200 / `cards` 조회 200 / anon INSERT 42501 거부
   - ⚠️ **GRANT 누락 버그를 로컬 리허설에서 발견** — 아래 §4.1-1 참조
 - [ ] **T1.5a** (권장) 로컬 스택 상시 사용 — Docker Desktop 설치 완료. 이후 모든 마이그레이션은 `npm run db:reset`으로 리허설한 뒤 `db:migrate`한다
-- [ ] **T1.6** `scripts/seed.ts` + 초기 카드 데이터 투입 — 게임별로 분리
-  - T1.6a 포켓몬: 공개 API 조사 후 수집 (API 가용 시 자동화)
-  - T1.6b 원피스: 공식 공개 API 부재 예상 → 수집 방식 결정 필요 (§9.2)
+- [x] **T1.5b** 마이그레이션 002 — 완료 (로컬 리허설 → 원격 적용 · 검증)
+  - `20260823000002_fix_card_name_nullability.sql` — `name_ja` → `not null`, `name_ko` → nullable, `cards_name_ja_trgm_idx` 추가
+  - 로컬 검증: `name_ko` 없이 INSERT 성공 / `name_ja` 없이 INSERT는 not-null 위반 / `name_ko`가 NULL이어도 search_vector 트리거 정상(`'ストライク':1A`)
+  - 원격 검증: 동일 2건 (201 / `23502`), 마이그레이션 이력 local↔remote 동기화 확인
+- [ ] **T1.6** `scripts/seed.ts` + 초기 카드 데이터 투입 — 원천은 §4.4에서 확정
+  - T1.6a ptcg 일본어: TCGdex 벌크 수집 (키 불필요, 1회 수집 후 DB 적재)
+  - T1.6b ptcg 한국어: `pokemoncard.co.kr` 스크래핑 → 코드 매칭으로 `name_ko` 갱신
+  - T1.6c opcg 일본어: `onepiece-cardgame.com` 스크래핑
+  - T1.6d opcg 한국어: `onepiece-cardgame.kr` 스크래핑 (2024-03 이후 세트만 존재)
+  - T1.6e 효과 키워드 자동 태깅 + 수동 보정
 - [ ] **T1.7** `GET /api/cards` + 도감 페이지 (필터 패널 · nuqs URL 동기화 · 무한스크롤)
 - [ ] **T1.8** 카드 상세 + `base-price-badge` + `similar-cards`(대체 카드 그룹)
 - [ ] **T1.9** 뉴스 모듈: 마이그레이션 + 목록 / 상세(ISR) + `sitemap.ts` / `robots.ts` + 개인정보처리방침 · 면책 페이지 (애드센스 심사 요건)
@@ -732,8 +798,8 @@ CRAWLER_SHARED_SECRET=
 ## 9. 결정이 필요한 사항 (Architect → 사용자)
 
 1. ~~**초기 지원 TCG 범위**~~ → **확정: 포켓몬(`ptcg`) + 원피스(`opcg`) 2종, 유희왕 제외.** 상세 룰과 스키마 영향은 §4.0 참조.
-2. **카드 데이터 원천** — 공개 API 활용 가능 여부에 따라 T1.6의 난이도가 크게 달라진다. 포켓몬은 공개 API(Pokémon TCG API 등) 후보가 있으나 **원피스는 공식 공개 API가 없어 수동 구축 가능성이 높다.** 두 게임의 수집 방식이 달라지므로 T1.6은 게임별로 분리해 진행한다. 수동 구축 시 이미지 저작권 처리 방침이 필요하다.
-3. **카드 이미지 호스팅** — 외부 핫링크 대신 Supabase Storage 또는 Cloudflare R2 캐싱 권장.
+2. ~~**카드 데이터 원천**~~ → **확정 (§4.4 실측)**: ptcg 일본어는 TCGdex(12,619장, 키 불필요), opcg 일본어는 공식 JP 사이트 스크래핑. **한국어는 두 게임 모두 공식 한국 사이트 스크래핑**으로만 확보 가능하며 커버리지가 부분적이다 → `name_ko` nullable 전환 필요(T1.5b).
+3. **카드 이미지 호스팅** — 외부 핫링크 대신 Supabase Storage 또는 Cloudflare R2 캐싱 권장. ptcg는 `assets.tcgdex.net`에서 화질 지정 가능. **저작권 방침 확정 전까지 이미지 없이 동작하는 폴백을 유지한다** (§4.4).
 4. **스크래핑 준수 범위** — 대상 3개 사이트의 이용약관 / `robots.txt` 검토 결과를 `docs/crawler-compliance.md`에 기록해야 한다. 차단 시 대체 전략(공식 API · 제휴)이 필요하다.
 5. **비로그인 매물 검색 허용 여부** — 허용 시 IP 해시 쿼터만으로 방어해야 하며 우회 여지가 커진다. 로그인 필수면 방어력은 오르나 초기 유입이 줄어든다.
 6. **환율 갱신 주기** — 기준가 KRW 환산 스냅샷 주기(일 1회 권장) 확정 필요.
