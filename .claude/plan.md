@@ -10,6 +10,7 @@
 
 | 버전 | 변경 |
 |------|------|
+| v3 | T1.1 실착수 결과 반영 — Next.js **16.3.2** 설치 확정(15.x 표기 정정), Next 16 파괴적 변경 §2.4 신설, 실제 npm scripts와 툴체인 버전 고정 사유 기록, Node 버전 제약 명시. |
 | v2 | `CLAUDE.md` 확정에 따라 전면 정렬 — pnpm 모노레포 안 폐기, `npm` + `src/` 4구획 단일 앱 구조 채택. 대체 카드 그룹화를 M:N 조인 테이블에서 `similar_group_id` FK로 변경. 매물 필터를 3종으로 고정. |
 | v1 | 초안 |
 
@@ -37,7 +38,7 @@
 | 영역 | 선택 |
 |------|------|
 | 패키지 매니저 | **npm** (`npm install` / `npm run dev` / `npm run build` / `npm run lint`) |
-| 프레임워크 | **Next.js 14+ (App Router)** — 신규 설치는 최신 안정판(15.x) 사용, App Router 전제 |
+| 프레임워크 | **Next.js 16.3.2 (App Router)** + React 19.2.8 — `CLAUDE.md`의 "14+" 조건 충족. 파괴적 변경은 §2.4 참조 |
 | 언어 | **TypeScript (strict 필수)** |
 | 스타일 | **Tailwind CSS + shadcn/ui** |
 | 클라이언트 상태 | **Zustand** |
@@ -61,26 +62,61 @@
 
 ### 2.3 npm scripts (package.json)
 
+**T1.1에서 등록 완료 (현재 상태)**
+
 ```jsonc
 {
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit",
+    "lint": "eslint",                          // Next 16에서 `next lint` 제거됨
+    "typecheck": "next typegen && tsc --noEmit", // typegen 산출물이 .next/(gitignore)라 선행 필요
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
-    "worker:dev": "npm --prefix workers/crawler run dev",
-    "worker:deploy": "npm --prefix workers/crawler run deploy",
-    "db:migrate": "supabase db push",
-    "db:seed": "tsx scripts/seed.ts"
+    "test:e2e": "playwright test"
   }
 }
 ```
 
-> ⚠️ `CLAUDE.md`의 Commands 목록에는 `test`가 없으나 `AGENT.md`의 Verification 단계가 `npm run test`를 요구한다. **T1.1에서 `test` 스크립트를 반드시 추가**하고, 이후 `CLAUDE.md`의 Commands 절에도 반영을 권장한다.
+**해당 태스크에서 추가할 스크립트** — 대상이 아직 없어 지금 등록하면 실패하는 스크립트가 되므로 미등록 상태다.
+
+| 스크립트 | 추가 시점 |
+|----------|-----------|
+| `db:migrate`: `supabase db push` | T1.5 (마이그레이션 001) |
+| `db:seed`: `tsx scripts/seed.ts` | T1.6 (시드 스크립트) |
+| `worker:dev` / `worker:deploy`: `npm --prefix workers/crawler run …` | T2.6 (워커 스캐폴딩) |
+
+> ⚠️ `CLAUDE.md`의 Commands 목록에는 `test`가 없으나 `AGENT.md`의 Verification 단계가 `npm run test`를 요구한다. 스크립트는 등록했으므로, `CLAUDE.md`의 Commands 절에도 `npm run test` · `npm run typecheck` 추가를 권장한다.
+
+### 2.4 Next.js 16 파괴적 변경 (Developer 필독)
+
+설치된 Next 16은 학습 데이터의 App Router 관례와 다르다. **Next 관련 코드를 쓰기 전에 `node_modules/next/dist/docs/`의 해당 가이드를 확인한다.**
+
+| 변경 | 영향 받는 태스크 | 대응 |
+|------|------------------|------|
+| **`params` / `searchParams` 비동기화** — 동기 접근 완전 제거 | T1.7, T1.8, T2.4, T3.5 등 모든 동적 라우트(`[cardId]`, `[deckId]`, `[slug]`, `[sessionId]`) | `const { cardId } = await props.params` 형태로 await |
+| **`cookies()` / `headers()` / `draftMode()` 비동기화** | T1.4 Supabase 서버 클라이언트, T3.1 인증 | `const cookieStore = await cookies()` |
+| **타입 헬퍼 생성** — `PageProps<'/cards/[cardId]'>`, `LayoutProps`, `RouteContext` | 전 라우트 | `next typegen`으로 생성. `npm run typecheck`에 포함됨 |
+| **`middleware.ts` → `proxy.ts`** — 함수명도 `proxy`, edge 런타임 미지원(nodejs 고정) | T3.1 Supabase 세션 갱신 | 파일명 · export명 모두 `proxy` |
+| **`next lint` 제거** | 전체 | `eslint` 직접 실행 (등록 완료) |
+| **`images.domains` 폐기** → `remotePatterns` | T1.7 카드 이미지 (§9.3) | `next.config.ts`에 `images.remotePatterns` 사용 |
+| **Turbopack 기본 활성** | 전체 | 별도 조치 없음 |
+
+> `next dev` 실행 시 Next가 `CLAUDE.md` 하단에 `<!-- BEGIN:nextjs-agent-rules -->` 블록을 자동 추가한다. 제거해도 재생성되므로 커밋에 포함한다.
+
+### 2.5 툴체인 버전 제약 (Node)
+
+**현재 개발 환경 Node v20.15.1** 기준으로 아래 패키지를 하향 고정했다. Next 16 자체는 `>=20.9.0`이라 문제없지만, 최신 테스트 툴체인은 Node **20.19.0+** 를 요구한다(20.19에서 백포트된 `require(esm)`과 rolldown 네이티브 바인딩).
+
+| 패키지 | 고정 버전 | 하향 사유 |
+|--------|-----------|-----------|
+| `vitest` | `^3.2.7` | v4는 rolldown 사용 → Node 20.19+ 필요, 네이티브 바인딩 설치 불가 |
+| `@vitejs/plugin-react` | `^4` | v6는 vite@8(rolldown)을 끌어옴 |
+| `vite-tsconfig-paths` | `^5` | 동일 |
+| `jsdom` | `^26` | v30은 `require(esm)` 사용 → Node 20.19+ 필요 |
+
+> **권장 조치:** Node를 **22 LTS**로 올리면 위 4개를 최신(vitest 4 / plugin-react 6 / jsdom 30)으로 되돌릴 수 있다. 팀 전체가 동일 버전을 쓰도록 `.nvmrc` 추가를 권장한다.
 
 ---
 
@@ -534,7 +570,14 @@ CRAWLER_SHARED_SECRET=
 
 ### Phase 1 — 기반 구축
 
-- [ ] **T1.1** 저장소 초기화: `git init`, `.gitignore`, `create-next-app`(App Router · TS strict · Tailwind), §2.3 npm scripts 등록, Vitest · Playwright 설정
+- [x] **T1.1** 저장소 초기화 — 완료
+  - `git init`(main) + origin `https://github.com/SiHo4829/deckbinder.git` + `.gitignore`
+  - Next.js 16.3.2 스캐폴딩 (App Router · TS strict · Tailwind v4 · src-dir · `@/*` 별칭)
+  - §2.3 npm scripts 등록, §2.5 툴체인 버전 고정
+  - Vitest(jsdom + Testing Library) · Playwright 설정 및 하네스 검증
+  - 검증: `lint` ✅ / `typecheck` ✅ / `test` ✅ 3건 / `build` ✅ / `test:e2e` ✅ 1건
+  - **E2E는 전용 포트 3100 사용** — 3000번은 다른 프로젝트와 충돌하며, `reuseExistingServer: false`로 외부 서버 오접속을 차단한다
+  - 부수 산출물: `src/components/common/empty-state.tsx`(+테스트) — 하네스 검증 겸 §3.2 정의 컴포넌트
 - [ ] **T1.2** shadcn/ui 초기화 + 디자인 토큰 정의 (`src/components/ui`)
 - [ ] **T1.3** 루트 레이아웃 · 라우트 그룹 `(content)` / `(app)` · `common/header.tsx` · `common/footer.tsx` · `error-boundary.tsx`
 - [ ] **T1.4** Supabase 연결: `src/lib/supabase/{client,server,admin}.ts`, `src/lib/env.ts`(zod 검증), `.env.example`
