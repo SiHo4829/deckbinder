@@ -11,9 +11,21 @@ export interface CardListItem {
   set_id: string | null;
 }
 
+/**
+ * 다음 페이지의 시작점.
+ *
+ * cards의 유니크 제약은 `(game_id, code)`라 **code만으로는 정렬 키가 유일하지 않다.**
+ * 게임 필터 없이 훑을 때 두 게임에 같은 code가 있으면 `code > cursor`가 뒤 카드를
+ * 통째로 건너뛴다. id를 함께 실어 (code, id)로 비교한다 (마이그레이션 007).
+ */
+export interface CardCursor {
+  code: string;
+  id: string;
+}
+
 export interface CardListResponse {
   items: CardListItem[];
-  nextCursor: string | null;
+  nextCursor: CardCursor | null;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAnonClient } from "@/lib/supabase/public";
 import { GAME_CODES } from "@/lib/validation/card";
 import type { CardFacets } from "@/types/card";
 
@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   const gameParam = new URL(request.url).searchParams.get("game");
   const game = GAME_CODES.find((c) => c === gameParam);
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAnonClient();
 
   const [facetsRes, setsRes, keywordsRes] = await Promise.all([
     supabase.rpc("card_facets", { p_game_code: game }),

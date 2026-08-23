@@ -117,9 +117,7 @@ export type Database = {
           name_ja: string
           name_ko: string | null
           rarity: string | null
-          search_vector: unknown
           set_id: string | null
-          similar_group_id: string | null
           sub_type: string | null
           updated_at: string
         }
@@ -137,9 +135,7 @@ export type Database = {
           name_ja: string
           name_ko?: string | null
           rarity?: string | null
-          search_vector?: unknown
           set_id?: string | null
-          similar_group_id?: string | null
           sub_type?: string | null
           updated_at?: string
         }
@@ -157,9 +153,7 @@ export type Database = {
           name_ja?: string
           name_ko?: string | null
           rarity?: string | null
-          search_vector?: unknown
           set_id?: string | null
-          similar_group_id?: string | null
           sub_type?: string | null
           updated_at?: string
         }
@@ -176,13 +170,6 @@ export type Database = {
             columns: ["set_id", "game_id"]
             isOneToOne: false
             referencedRelation: "card_sets"
-            referencedColumns: ["id", "game_id"]
-          },
-          {
-            foreignKeyName: "cards_similar_group_same_game_fk"
-            columns: ["similar_group_id", "game_id"]
-            isOneToOne: false
-            referencedRelation: "similar_groups"
             referencedColumns: ["id", "game_id"]
           },
         ]
@@ -294,38 +281,6 @@ export type Database = {
         }
         Relationships: []
       }
-      similar_groups: {
-        Row: {
-          created_at: string
-          game_id: string
-          id: string
-          name: string
-          role_note: string | null
-        }
-        Insert: {
-          created_at?: string
-          game_id: string
-          id?: string
-          name: string
-          role_note?: string | null
-        }
-        Update: {
-          created_at?: string
-          game_id?: string
-          id?: string
-          name?: string
-          role_note?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "similar_groups_game_id_fkey"
-            columns: ["game_id"]
-            isOneToOne: false
-            referencedRelation: "games"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
     }
     Views: {
       [_ in never]: never
@@ -344,6 +299,7 @@ export type Database = {
           p_attribute?: string
           p_card_type?: string
           p_cursor?: string
+          p_cursor_id?: string
           p_game_code?: string
           p_keyword_codes?: string[]
           p_limit?: number
