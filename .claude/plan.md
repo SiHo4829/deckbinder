@@ -10,6 +10,7 @@
 
 | 버전 | 변경 |
 |------|------|
+| v11 | T1.6a 완료 — ptcg 일본어 12,619장 적재. 003(card_sets nullability, 002에서 누락분) 추가 적용. §4.4에 실측 메모 신설: TCGdex 일본어 카드에 **이미지가 없고**, `energyType`은 `"Normal"`=기본이며, GraphQL은 언어 인자가 없다. |
 | v10 | T1.5b 완료 — 마이그레이션 002 적용. cards 이름 컬럼 nullability를 §4.4 실측에 맞게 교정하고 일본어명 trigram 인덱스 추가. §4.1 데이터 모델 · 인덱스 설명을 실제 스키마와 일치시킴. |
 | v9 | **카드 데이터 원천 확정 (§4.4 신설, 실측 기반)** — ptcg 일본어는 TCGdex(12,619장), opcg는 공식 사이트 스크래핑. 한국어는 두 게임 모두 부분 커버리지. **`name_ko not null` / `name_ja` nullable이 정반대임을 발견** → T1.5b(마이그레이션 002)로 교정. T1.6을 5개 하위 태스크로 분해. §9.2 해소. |
 | v8 | T1.5 결과 반영 — 마이그레이션 001 적용 완료. **§4.1-1 신설: RLS 정책만으로는 접근이 성립하지 않는다(GRANT 선행 검사)** — 로컬 리허설에서 anon SELECT와 service_role INSERT가 모두 막히고 TRUNCATE가 열려 있던 것을 발견해 revoke/grant 3단 규칙을 표준화. |
@@ -583,6 +584,15 @@ Reviewer는 신규 테이블마다 `revoke all` → 최소 권한 `grant` → RL
 
 **표기 규칙:** UI는 `name_ko ?? name_ja`로 표시하고, 한국어명이 없으면 일본어명을 그대로 노출한다. 별도 번역을 생성하지 않는다.
 
+#### T1.6a 실측 메모 (수집 중 확인)
+
+| 항목 | 실측 | 대응 |
+|------|------|------|
+| **카드 이미지** | TCGdex 일본어 카드에 `image` 필드가 없고 `assets.tcgdex.net`의 ja 경로도 404 | **이미지 없이 동작하는 UI가 필수**다(§9.3). 이미지는 별도 원천 확보 전까지 미제공 |
+| **`energyType` 어휘** | 기본 에너지는 `"Basic"`이 아니라 **`"Normal"`**, 특수는 `"Special"`, 구세트(PMCG 등)는 값 없음 | `"Normal"`/`"Basic"` → `basic_energy`, 값이 없으면 이름 「基本◯エネルギー」로 판별. 기본 에너지 119장 확보 |
+| **GraphQL 언어** | TCGdex GraphQL은 언어 인자가 없어 영어 전용 | 일본어는 REST `/v2/ja/`만 사용. 카드 상세는 카드당 1요청이라 동시성 8로 제한 |
+| **`supabase-js`** | 생성 시 realtime이 네이티브 WebSocket(Node 22+)을 요구해 Node 20.15에서 즉시 실패 | 시드는 PostgREST를 직접 호출한다 (§2.5 Node 제약의 세 번째 사례) |
+
 #### T1.6 수집 전략
 
 | 단계 | 대상 | 방식 |
@@ -759,7 +769,10 @@ CRAWLER_SHARED_SECRET=
   - 로컬 검증: `name_ko` 없이 INSERT 성공 / `name_ja` 없이 INSERT는 not-null 위반 / `name_ko`가 NULL이어도 search_vector 트리거 정상(`'ストライク':1A`)
   - 원격 검증: 동일 2건 (201 / `23502`), 마이그레이션 이력 local↔remote 동기화 확인
 - [ ] **T1.6** `scripts/seed.ts` + 초기 카드 데이터 투입 — 원천은 §4.4에서 확정
-  - T1.6a ptcg 일본어: TCGdex 벌크 수집 (키 불필요, 1회 수집 후 DB 적재)
+  - [x] **T1.6a ptcg 일본어: 완료** — 세트 183개 · 카드 **12,619장** 적재 (실패 0건)
+    - `scripts/seed.ts` + `src/lib/domain/ingest/tcgdex.ts`(순수 매퍼, 테스트 14건)
+    - `--enrich-only [--card-type=X]` 모드 — 매핑 수정 시 전체 재수집 없이 대상만 재보강
+    - 재실행 멱등성 확인 (2회 실행 후 총계 불변)
   - T1.6b ptcg 한국어: `pokemoncard.co.kr` 스크래핑 → 코드 매칭으로 `name_ko` 갱신
   - T1.6c opcg 일본어: `onepiece-cardgame.com` 스크래핑
   - T1.6d opcg 한국어: `onepiece-cardgame.kr` 스크래핑 (2024-03 이후 세트만 존재)

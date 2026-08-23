@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "db:reset": "supabase db reset",
-    "db:migrate": "supabase db push"
+    "db:migrate": "supabase db push",
+    "db:seed": "tsx --env-file=.env.local scripts/seed.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
@@ -46,6 +47,7 @@
     "jsdom": "^26.1.0",
     "supabase": "^2.115.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "^5",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.2.7"
