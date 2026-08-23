@@ -6,22 +6,21 @@
 
 ---
 
-## 0. 개정 이력
+## 0. 문서 성격
 
-| 버전 | 변경 |
+본 문서는 **현재 확정된 설계**만 담는다. 태스크별 진행 이력은 git 로그에 있으므로 여기서 중복하지 않는다.
+
+되돌리려면 근거를 다시 확인해야 하는 결정만 아래에 남긴다.
+
+| 결정 | 근거 |
 |------|------|
-| v12 | T1.7 완료 — 도감 검색·무한스크롤. §4.4에 T1.7 실측 메모 신설: 일본어는 tsvector가 아닌 ilike+trgm으로 검색해야 하고, Supabase 클라이언트는 Next 런타임에서만 동작하며, nuqs는 Suspense 경계가 필요하다. 레어도·속성·팩·키워드 필터는 facets 선행이 필요해 T1.7b로 분리. |
-| v11 | T1.6a 완료 — ptcg 일본어 12,619장 적재. 003(card_sets nullability, 002에서 누락분) 추가 적용. §4.4에 실측 메모 신설: TCGdex 일본어 카드에 **이미지가 없고**, `energyType`은 `"Normal"`=기본이며, GraphQL은 언어 인자가 없다. |
-| v10 | T1.5b 완료 — 마이그레이션 002 적용. cards 이름 컬럼 nullability를 §4.4 실측에 맞게 교정하고 일본어명 trigram 인덱스 추가. §4.1 데이터 모델 · 인덱스 설명을 실제 스키마와 일치시킴. |
-| v9 | **카드 데이터 원천 확정 (§4.4 신설, 실측 기반)** — ptcg 일본어는 TCGdex(12,619장), opcg는 공식 사이트 스크래핑. 한국어는 두 게임 모두 부분 커버리지. **`name_ko not null` / `name_ja` nullable이 정반대임을 발견** → T1.5b(마이그레이션 002)로 교정. T1.6을 5개 하위 태스크로 분해. §9.2 해소. |
-| v8 | T1.5 결과 반영 — 마이그레이션 001 적용 완료. **§4.1-1 신설: RLS 정책만으로는 접근이 성립하지 않는다(GRANT 선행 검사)** — 로컬 리허설에서 anon SELECT와 service_role INSERT가 모두 막히고 TRUNCATE가 열려 있던 것을 발견해 revoke/grant 3단 규칙을 표준화. |
-| v7 | T1.4 결과 반영 — 환경변수를 `env.ts`(클라이언트) / `env.server.ts`(서버 시크릿, `server-only`) 2개로 분리. 단일 `env.ts`로 두면 서버 시크릿 스키마가 클라이언트 번들 경로에 노출된다. Supabase 클라이언트 3종 추가. |
-| v6 | T1.3 결과 반영 — 앱 셸 구성 완료, `next-themes` 도입으로 다크 모드 해소, `src/lib/navigation.ts` · `common/*` 목록 갱신, 플레이스홀더 페이지 4종의 대체 시점 명시, TanStack Query 프로바이더를 T1.7로 이관. |
-| v5 | T1.2 결과 반영 — §2.6 shadcn 설정 신설(base=radix / preset=nova, alias 2건 수정 사유), 프로젝트 토큰 분리 원칙, 루트 트리에서 `tailwind.config.ts` 제거(Tailwind v4 CSS-first) 후 `components.json` 추가, T1.3에 다크 모드 활성화 과제 명시. |
-| v4 | 초기 지원 TCG를 **포켓몬 + 원피스** 2종으로 확정(유희왕 제외). §4.0 게임별 룰 신설, `games` 테이블에 룰 컬럼 추가, `deck_cards.zone`을 `main\|leader\|don`으로 변경, 첫 손패 매수를 게임별로 분기. |
-| v3 | T1.1 실착수 결과 반영 — Next.js **16.3.2** 설치 확정(15.x 표기 정정), Next 16 파괴적 변경 §2.4 신설, 실제 npm scripts와 툴체인 버전 고정 사유 기록, Node 버전 제약 명시. |
-| v2 | `CLAUDE.md` 확정에 따라 전면 정렬 — pnpm 모노레포 안 폐기, `npm` + `src/` 4구획 단일 앱 구조 채택. 대체 카드 그룹화를 M:N 조인 테이블에서 `similar_group_id` FK로 변경. 매물 필터를 3종으로 고정. |
-| v1 | 초안 |
+| 지원 TCG는 **포켓몬 + 원피스** 2종 (유희왕 제외) | §4.0 |
+| 카드 데이터는 **자체 구축**. 외부 사이트 연동 없음 | §4.4 |
+| `cards.name_ja`는 `not null`, `name_ko`는 nullable | §4.4 |
+| 대체 카드는 M:N이 아니라 `similar_group_id` FK | CLAUDE.md 지정 |
+| 단일 앱 구조(`src/` 4구획). 모노레포 아님 | CLAUDE.md 지정 |
+| shadcn base는 `radix` (CLI 기본값 `base` 아님) | §2.6 |
+| RLS 정책과 **함께 GRANT를 반드시 준다** | §4.1-1 |
 
 ---
 
@@ -69,9 +68,7 @@
 | 워커 쿼터 | **Durable Object** | 분당 3회 카운터의 강한 일관성 |
 | URL 상태 | **nuqs** | 카드 필터의 URL 동기화(공유 · SEO) |
 
-### 2.3 npm scripts (package.json)
-
-**T1.1에서 등록 완료 (현재 상태)**
+### 2.3 npm scripts
 
 ```jsonc
 {
@@ -79,25 +76,20 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",                          // Next 16에서 `next lint` 제거됨
-    "typecheck": "next typegen && tsc --noEmit", // typegen 산출물이 .next/(gitignore)라 선행 필요
+    "lint": "eslint",                            // Next 16에서 `next lint` 제거됨
+    "typecheck": "next typegen && tsc --noEmit",  // typegen 산출물이 .next/(gitignore)라 선행 필요
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "db:reset": "supabase db reset",     // 로컬 리허설 (Docker 필요)
-    "db:migrate": "supabase db push"     // 원격 적용
+    "db:reset": "supabase db reset",              // 로컬 리허설 (Docker 필요)
+    "db:migrate": "supabase db push"              // 원격 적용
   }
 }
 ```
 
-**해당 태스크에서 추가할 스크립트** — 대상이 아직 없어 지금 등록하면 실패하는 스크립트가 되므로 미등록 상태다.
+> 마이그레이션은 **항상 `db:reset`으로 로컬 리허설 후 `db:migrate`** 한다. §4.1-1의 GRANT 누락은 이 리허설에서 잡혔다.
 
-| 스크립트 | 추가 시점 |
-|----------|-----------|
-| `db:seed`: `tsx scripts/seed.ts` | T1.6 (시드 스크립트) |
-| `worker:dev` / `worker:deploy`: `npm --prefix workers/crawler run …` | T2.6 (워커 스캐폴딩) |
-
-> ⚠️ `CLAUDE.md`의 Commands 목록에는 `test`가 없으나 `AGENT.md`의 Verification 단계가 `npm run test`를 요구한다. 스크립트는 등록했으므로, `CLAUDE.md`의 Commands 절에도 `npm run test` · `npm run typecheck` 추가를 권장한다.
+> ⚠️ `CLAUDE.md`의 Commands 목록에 `test` · `typecheck`가 없다. 추가를 권장한다.
 
 ### 2.4 Next.js 16 파괴적 변경 (Developer 필독)
 
@@ -157,6 +149,19 @@ shadcn CLI 4.19에서 `-b/--base` 플래그의 의미가 **base color → primit
 
 > **기준가 전용 색상 토큰은 의도적으로 만들지 않았다.** 가격에 의미색(상승 녹색 등)을 부여하면 P6의 "시세 변동 표현 배제" 원칙과 충돌한다. 기준가는 `foreground` / `primary`로 표기한다.
 
+### 2.7 실행 환경에서 확인된 제약 (Developer 필독)
+
+문서만 봐서는 알 수 없고, 실제로 부딪혀서 알아낸 것들이다. 모두 **조용히 잘못 동작**하는 유형이라 다시 밟기 쉽다.
+
+| 제약 | 증상 | 대응 |
+|------|------|------|
+| **PostgREST 행 상한** | `limit=100000`을 보내도 서버 설정(`db-max-rows`, 기본 **1000**)에서 잘린다. 에러 없이 잘리므로 대조·집계가 **틀린 결과를 조용히 낸다** | 1000행을 넘길 수 있는 조회는 `Range` 헤더로 페이지네이션한다 |
+| **Supabase 클라이언트 런타임** | 순수 Node 20.15에서 `createServerClient`/`createClient`가 네이티브 WebSocket 부재로 **즉시 실패**한다. Next 런타임(dev·build)은 undici를 번들해서 정상 동작한다 | 앱 코드는 `@/lib/supabase/*` 그대로 사용. **독립 실행 스크립트**는 PostgREST를 직접 호출한다 |
+| **일본어 전문검색** | `simple` 사전은 공백으로 토큰을 나눈다. 일본어에는 공백이 없어 카드명 전체가 토큰 1개가 되고 **부분일치가 전혀 안 된다** | 검색은 `search_vector`가 아니라 **`ilike` + `pg_trgm` 인덱스**로 한다. `name_ja`/`name_ko`를 `or`로 묶는다 |
+| **nuqs 배열 직렬화** | 배열 파라미터를 **쉼표로 직렬화**한다(`keywords=a,b`). 반복 키(`keywords=a&keywords=b`)로 보내면 첫 값만 읽어 **필터가 조용히 일부만 적용**된다 | 키워드 코드를 `^[a-z0-9_]+$`로 제한해 쉼표가 값에 들어갈 수 없게 막았다. 서버 파서는 두 형식을 모두 받는다 |
+| **`useSearchParams` + 정적 프리렌더** | Suspense 경계가 없으면 `next build`가 실패한다. **dev와 E2E는 통과**해서 빌드까지 돌리지 않으면 놓친다 | nuqs를 쓰는 컴포넌트를 `<Suspense>`로 감싼다 |
+
+
 ---
 
 ## 3. 전체 디렉토리 구조
@@ -178,8 +183,6 @@ deckbinder/
 │   ├── adr/                        # 아키텍처 결정 기록
 │   └── crawler-compliance.md       # 스크래핑 대상별 준수 사항
 ├── public/
-├── scripts/
-│   └── seed.ts                     # 카드 · 키워드 · 그룹 시드 투입
 ├── src/
 │   ├── app/                        # 라우팅 · API · 데이터 페칭 (얇게 유지)
 │   ├── components/
@@ -195,7 +198,8 @@ deckbinder/
 │   │   ├── hooks/                  # 공용 훅
 │   │   ├── env.ts                  # 환경변수 런타임 검증
 │   │   └── utils/
-│   └── types/                      # TypeScript 인터페이스 정의
+│   ├── types/                      # TypeScript 인터페이스 정의
+│   └── proxy.ts                    # Next 16 미들웨어. /admin 경로 보호
 ├── supabase/
 │   ├── migrations/
 │   ├── seed/
@@ -243,9 +247,15 @@ src/app/
 │   └── binder/
 │       ├── page.tsx                      # 내 컬렉션 (인증 필요)
 │       └── [slug]/page.tsx               # 공개 바인더 (SNS 공유, OG 이미지)
+├── admin/                                # ── 관리자 (색인 제외, proxy.ts가 보호)
+│   ├── layout.tsx
+│   ├── login/page.tsx
+│   ├── page.tsx                          # 대시보드
+│   ├── sets/page.tsx                     # 세트 등록
+│   └── cards/new/page.tsx                # 카드 등록
 ├── auth/
 │   ├── login/page.tsx
-│   └── callback/route.ts                 # OAuth 콜백
+│   └── callback/route.ts                 # OAuth 콜백 (T3.1)
 ├── api/                                  # Route Handlers (§6)
 │   ├── cards/
 │   │   ├── route.ts
@@ -262,6 +272,10 @@ src/app/
 │   │   ├── share/route.ts
 │   │   └── [slug]/route.ts
 │   ├── news/route.ts
+│   ├── admin/                            # 전 라우트 requireAdmin() 통과 후 service_role 사용
+│   │   ├── session/route.ts
+│   │   ├── sets/route.ts
+│   │   └── cards/route.ts · cards/[cardId]/route.ts
 │   └── market/
 │       ├── session/route.ts              # POST — 쿼터 검사 + 서명 토큰 발급
 │       └── stream/[sessionId]/route.ts   # GET(SSE) — 진행 단계 + 결과
@@ -278,9 +292,10 @@ src/components/
 │   ├── button.tsx  dialog.tsx  sheet.tsx  select.tsx  skeleton.tsx ...
 ├── features/                             # 도메인별 UI 묶음
 │   ├── cards/
+│   │   ├── card-browser.tsx              # 필터+그리드 조립, URL 동기화 · 무한스크롤
 │   │   ├── card-grid.tsx
-│   │   ├── card-filter-panel.tsx         # 속성 · 레어도 · 팩 · 효과 키워드
-│   │   ├── card-detail.tsx
+│   │   ├── card-filter-panel.tsx         # 검색어 · 게임 · 종류 (나머지는 T1.7b)
+│   │   ├── card-detail.tsx               # (T1.8)
 │   │   ├── base-price-badge.tsx          # 기준가 1개만 표기 (차트 금지)
 │   │   ├── similar-cards.tsx             # 대체 카드 그룹
 │   │   └── use-card-search.ts
@@ -306,6 +321,12 @@ src/components/
 │   └── news/
 │       ├── news-list.tsx
 │       └── news-article.tsx
+├── admin/
+│   ├── field.tsx                         # Field · TextInput · TextArea · NativeSelect · StatusMessage
+│   ├── use-admin-form.ts                 # 등록 폼 공통 제출·에러 처리
+│   ├── admin-login-form.tsx
+│   ├── set-form.tsx
+│   └── card-form.tsx
 └── common/
     ├── header.tsx                        # 서버 컴포넌트. 내비 · 테마 토글 조립
     ├── main-nav.tsx                      # 데스크톱 내비 (client — usePathname)
@@ -322,6 +343,11 @@ src/components/
 
 ```
 src/lib/
+├── admin/
+│   ├── session.ts                        # ADMIN_TOKEN 검증 · 쿠키 값 (server-only)
+│   ├── guard.ts                          # requireAdmin() — 인증의 실제 판단 지점
+│   ├── responses.ts                      # zod/Postgres 오류 → 응답 매핑
+│   └── queries.ts                        # 관리자 화면 조회
 ├── supabase/
 │   ├── client.ts                         # 브라우저용 (anon key)
 │   ├── server.ts                         # RSC/Route Handler용 (쿠키 세션)
@@ -356,7 +382,9 @@ src/lib/
 ├── env.ts                                # parseEnv 헬퍼 + 클라이언트 환경변수 (NEXT_PUBLIC_*)
 ├── env.server.ts                         # ★ 서버 시크릿 전용. 'server-only'로 브라우저 import 차단
 └── utils/
-    ├── cn.ts  format.ts  currency.ts  hash.ts
+    ├── cn.ts                             # 클래스 병합
+    ├── form.ts                           # 폼 컨트롤 공용 클래스
+    └── (예정) format.ts  currency.ts  hash.ts
 ```
 
 **모듈 규칙 (Reviewer 검증 항목)**
@@ -544,75 +572,36 @@ Reviewer는 신규 테이블마다 `revoke all` → 최소 권한 `grant` → RL
 6. UI 노출은 `base-price-badge.tsx` 단일 컴포넌트로 통일. 변동률 · 스파크라인 · 차트 컴포넌트를 만들지 않는다
 
 
-### 4.4 카드 데이터 원천 (T1.6 확정 · 2026-08-23 실측)
+### 4.4 카드 데이터 원천 — **자체 구축 (외부 연동 없음)**
 
-각 후보를 직접 호출해 측정한 결과다. 문서가 아니라 응답 기준이다.
+**2026-08-23 방침 변경.** 외부 사이트 연동을 전면 중단하고 카드 데이터를 자체 DB로 직접 관리한다.
 
-#### 포켓몬 (`ptcg`)
+* 수집했던 데이터(포켓몬 12,619장 · 원피스 4,962장 · 세트 243개)는 **전량 삭제**했다. `games`의 룰 2행만 남는다.
+* 수집 스크립트와 파서(`scripts/seed*.ts`, `src/lib/domain/ingest/*`)는 **제거**했다. 남겨두면 누군가 실행해 자체 데이터를 덮어쓸 위험이 있다.
+* 등록 경로는 **관리자 화면**(§4.5)이다.
 
-| 원천 | 측정값 | 판정 |
-|------|--------|------|
-| **TCGdex** `api.tcgdex.net/v2/ja` | 카드 **12,619**장 / 세트 183개, 최신 M5(메가) 시대까지 | ✅ **일본어 주 원천** |
-| TCGdex `/v2/ko` | 카드 **239**장 / 세트 95개 — 세트 메타데이터만 있고 카드가 비어 있는 세트가 대부분(SV3a·SV1a·SV2P 모두 0장) | ❌ 한국어 원천으로 사용 불가 |
-| TCGdex `/v2/en` | 카드 23,546장 (참고용) | — |
-| `pokemoncard.co.kr` (공식 한국) | HTTP 200, 서버 렌더링 HTML | ⚠️ 한국어 보완 원천 (스크래핑 필요) |
+`docs/crawler-compliance.md`의 포켓몬·원피스 항목은 이력으로만 남긴다. 일본 중고 매물 크롤러(T2.7)는 별개이며 그대로 유효하다.
 
-* TCGdex는 **API 키 불필요 · 명시적 rate limit 없음**. 다만 "과하게 호출하지 말고 로컬에 캐시하라"는 방침이므로 수집은 1회 벌크 후 DB 적재로 끝낸다.
-* 이미지는 `assets.tcgdex.net`에 별도 호스팅되며 화질/포맷을 URL로 지정한다(`high.webp` 등).
+**유지되는 제약**
 
-#### 원피스 (`opcg`)
-
-| 원천 | 측정값 | 판정 |
-|------|--------|------|
-| `onepiece-cardgame.com` (공식 일본) | HTTP 200, 8개 언어 제공(한국어 포함). 필터·페이지네이션은 클라이언트 JS | ✅ **일본어 주 원천** (스크래핑) |
-| **`onepiece-cardgame.kr`** (공식 한국) | HTTP 200, 서버 렌더링 HTML. 반다이남코코리아 한글판 **2024-03-22 발매** | ✅ **한국어 원천** (스크래핑) |
-| `apitcg.com` | One Piece 지원하나 **API 키 등록 필수** | 🔄 스크래핑 실패 시 대안 |
-| `optcgapi.com` | 엔드포인트 404 | ❌ |
-
-* 두 공식 사이트 모두 `robots.txt`가 없다(404). 크롤 금지 명시는 없으나 **이용약관 검토는 별도로 필요**하며 결과를 `docs/crawler-compliance.md`에 기록한다.
-* 한글판이 2024-03 시작이므로 **그 이전 세트에는 한국어 이름이 존재하지 않는다.**
-
-#### ★ 스키마에 미치는 결정적 영향
-
-마이그레이션 001은 `name_ko`를 `not null`, `name_ja`를 nullable로 정의했다. **실측 결과 이는 정반대다.**
-
-| 컬럼 | 001 정의 | 실제 필요 | 근거 |
-|------|----------|-----------|------|
-| `name_ja` | nullable | **`not null`** | 크롤러가 메르카리·라쿠마·야후옥션 검색어로 쓰는 유일한 키. 없으면 §5.3 매물 조회가 성립하지 않는다 |
-| `name_ko` | `not null` | **nullable** | 포켓몬은 API 커버리지 2%, 원피스는 2024-03 이전 세트에 한국어판 자체가 없다 |
-
-`name_ko not null`을 유지하면 **포켓몬 카드의 98%를 적재할 수 없다.** 마이그레이션 002로 교정한다(T1.5b).
-
-**표기 규칙:** UI는 `name_ko ?? name_ja`로 표시하고, 한국어명이 없으면 일본어명을 그대로 노출한다. 별도 번역을 생성하지 않는다.
-
-#### T1.7 실측 메모
-
-| 항목 | 실측 | 대응 |
+| 컬럼 | 제약 | 사유 |
 |------|------|------|
-| **일본어 전문검색** | `simple` 사전은 공백으로 토큰을 나눈다. 일본어는 공백이 없어 카드명 전체가 토큰 1개가 되고, 부분일치가 안 된다 | 검색은 `search_vector`가 아니라 **`ilike` + pg_trgm 인덱스**로 처리한다. `name_ja`/`name_ko`를 `or`로 묶는다 |
-| **Supabase 클라이언트 런타임** | 순수 Node 20.15에서는 `createServerClient`가 WebSocket 부재로 실패하지만, **Next 런타임(dev·build)에서는 정상 동작**한다(undici 번들) | 앱 코드는 `@/lib/supabase/*`를 그대로 쓴다. **독립 실행 스크립트만** PostgREST 직접 호출이 필요하다 |
-| **nuqs + 정적 프리렌더** | `useSearchParams`를 쓰는 컴포넌트는 Suspense 경계가 없으면 `next build`의 프리렌더에서 실패한다(dev에서는 드러나지 않음) | 도감 페이지에서 `<Suspense>`로 감싼다 |
+| `cards.name_ja` | `not null` | 크롤러가 메르카리·라쿠마·야후옥션을 검색하는 유일한 키(§5.3). 자체 입력에서도 필수다 |
+| `cards.name_ko` | nullable | 한국 미발매 카드가 존재한다. 표기는 `coalesce(name_ko, name_ja)` |
+| `cards.sub_type` | `basic_energy`면 매수 제한 면제 | §4.0 |
 
-#### T1.6a 실측 메모 (수집 중 확인)
+### 4.5 관리자 화면 (T1.6-A)
 
-| 항목 | 실측 | 대응 |
-|------|------|------|
-| **카드 이미지** | TCGdex 일본어 카드에 `image` 필드가 없고 `assets.tcgdex.net`의 ja 경로도 404 | **이미지 없이 동작하는 UI가 필수**다(§9.3). 이미지는 별도 원천 확보 전까지 미제공 |
-| **`energyType` 어휘** | 기본 에너지는 `"Basic"`이 아니라 **`"Normal"`**, 특수는 `"Special"`, 구세트(PMCG 등)는 값 없음 | `"Normal"`/`"Basic"` → `basic_energy`, 값이 없으면 이름 「基本◯エネルギー」로 판별. 기본 에너지 119장 확보 |
-| **GraphQL 언어** | TCGdex GraphQL은 언어 인자가 없어 영어 전용 | 일본어는 REST `/v2/ja/`만 사용. 카드 상세는 카드당 1요청이라 동시성 8로 제한 |
-| **`supabase-js`** | 생성 시 realtime이 네이티브 WebSocket(Node 22+)을 요구해 Node 20.15에서 즉시 실패 | 시드는 PostgREST를 직접 호출한다 (§2.5 Node 제약의 세 번째 사례) |
+| 항목 | 내용 |
+|------|------|
+| 인증 | `ADMIN_TOKEN` 환경변수 + httpOnly 쿠키(해시 저장, 12시간). **T3.1 계정 권한 전까지 임시** |
+| 경로 보호 | `src/proxy.ts`가 `/admin/*`에서 쿠키 존재를 확인해 로그인으로 보낸다 |
+| 값 검증 | 각 API가 `requireAdmin()`으로 쿠키 값을 직접 검증한다. proxy만 믿지 않는다 |
+| 쓰기 권한 | `service_role`(RLS 우회)이므로 인증 뒤에서만 호출한다 |
+| 화면 | `/admin`(대시보드) · `/admin/sets` · `/admin/keywords` · `/admin/cards/new` |
+| API | `POST /api/admin/session` · `POST /api/admin/sets` · `POST /api/admin/cards` · `PATCH·DELETE /api/admin/cards/[cardId]` |
 
-#### T1.6 수집 전략
-
-| 단계 | 대상 | 방식 |
-|------|------|------|
-| T1.6a | ptcg 일본어 | TCGdex 벌크 수집 → `cards`(name_ja, effect_text, rarity, image_url) |
-| T1.6b | ptcg 한국어 | `pokemoncard.co.kr` 스크래핑 → 카드 코드로 매칭해 `name_ko` 갱신 |
-| T1.6c | opcg 일본어 | `onepiece-cardgame.com` 스크래핑 |
-| T1.6d | opcg 한국어 | `onepiece-cardgame.kr` 스크래핑 → `name_ko` 갱신 (2024-03 이후 세트만) |
-| T1.6e | 키워드 태깅 | `effect_text` 정규식 규칙으로 `card_keywords` 1차 자동 부여 후 수동 보정 |
-
-> **이미지 저작권(§9.3 연계):** 카드 이미지는 각 유통사 저작물이다. 핫링크 대신 자체 캐싱을 하더라도 저작권 문제는 남는다. `docs/crawler-compliance.md`에 이미지 사용 방침을 명시하고, 최악의 경우 이미지 없이 텍스트 정보만 제공하는 폴백을 유지한다.
+> ⚠️ **토큰 1개 = 전체 쓰기 권한**이다. 유출되면 카탈로그 전체를 조작할 수 있다. T3.1에서 계정 기반 권한으로 교체한다.
 
 
 ---
@@ -623,7 +612,8 @@ Reviewer는 신규 테이블마다 `revoke all` → 최소 권한 `grant` → RL
 
 | Method | Path | 설명 | 인증 |
 |--------|------|------|------|
-| GET | `/api/cards` | 도감 검색. `q, game, set, rarity, attribute, keywords[], cursor, limit` | — |
+| GET | `/api/cards` | 도감 검색. `q, game, set, rarity, attribute, cardType, keywords[], cursor, limit`. **키워드는 AND(모두 보유)** | — |
+| GET | `/api/cards/facets` | 필터 선택지(레어도 · 속성 · 종류 · 세트 · 키워드). `game`으로 좁힌다 | — |
 | GET | `/api/cards/:cardId` | 상세 + 최신 기준가 1건 | — |
 | GET | `/api/cards/:cardId/alternatives` | 동일 `similar_group_id` 카드 목록 | — |
 | GET | `/api/decks` | 레시피 목록. `game, tier, sourceType, cursor` | — |
@@ -638,6 +628,16 @@ Reviewer는 신규 테이블마다 `revoke all` → 최소 권한 `grant` → RL
 | GET | `/api/news` | 기사 목록 | — |
 | **POST** | **`/api/market/session`** | **쿼터 검사 → 세션 생성 → 서명 토큰 발급. body: `{ cardId: string, condition }`** | 선택 |
 | **GET** | **`/api/market/stream/:sessionId`** | **SSE. 진행 단계 이벤트 + 최종 결과** | 세션 소유자 |
+
+**관리자 API** (`/api/admin/*`) — 전 라우트가 `requireAdmin()` 통과 후 `service_role`로 쓴다 (§4.5).
+
+| Method | Path | 설명 |
+|--------|------|------|
+| POST / DELETE | `/api/admin/session` | 토큰 로그인 / 로그아웃 |
+| POST | `/api/admin/sets` | 세트 등록 |
+| POST | `/api/admin/keywords` | 효과 키워드 등록 |
+| POST | `/api/admin/cards` | 카드 등록 |
+| PATCH / DELETE | `/api/admin/cards/:cardId` | 카드 수정 · 삭제 |
 
 **금지 엔드포인트** — 아래는 설계상 만들지 않는다.
 `GET /api/cards/:id/price-history` · `POST /api/market/batch` · `GET /api/cards/export` · 공개 API 키 발급
@@ -700,31 +700,40 @@ Client                Next.js /api/market            Worker              외부 
 # .env.local (gitignore 대상 / 저장소에는 .env.example만 커밋)
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=        # 서버 전용, NEXT_PUBLIC_ 접두사 금지
-CRAWLER_WORKER_URL=
-CRAWLER_SHARED_SECRET=            # HMAC 서명 키 (워커와 동일 값)
-IP_HASH_SALT=
+SUPABASE_SERVICE_ROLE_KEY=        # 서버 전용. NEXT_PUBLIC_ 접두사 금지
 NEXT_PUBLIC_SITE_URL=
 
-# workers/crawler (wrangler secret put)
-CRAWLER_SHARED_SECRET=
+ADMIN_TOKEN=                      # 관리자 화면(16자 이상). T3.1 정식 인증 전까지 임시
+
+SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런타임 미사용
+
+# T2.9에서 활성화
+# CRAWLER_WORKER_URL=
+# CRAWLER_SHARED_SECRET=
+# IP_HASH_SALT=
 ```
 
-`src/lib/env.ts`에서 zod로 부팅 시 검증하고, 누락 시 즉시 실패시킨다.
+* `src/lib/env.ts`가 클라이언트 변수를, `src/lib/env.server.ts`가 서버 시크릿을 부팅 시 검증한다.
+* 시크릿은 **추적되는 파일(`.gitignore` 포함)에 절대 적지 않는다.**
 
 ---
 
 ## 7. 테스트 전략 (TDD)
 
-단위 테스트는 소스 옆에 `*.test.ts`로 배치하고, E2E만 `tests/e2e`에 둔다.
+단위 테스트는 소스 옆에 `*.test.ts`로 두고, E2E만 `tests/e2e`에 둔다.
 
 | 레벨 | 도구 | 대상 | 필수 케이스 |
 |------|------|------|-------------|
+| 단위 | Vitest | `src/lib/validation` | 검색 파라미터 정규화 · limit 상한, 관리자 입력의 선택 항목 null 정규화 · `name_ja` 필수 |
 | 단위 | Vitest | `src/lib/domain` | 시드 셔플 재현성, 멀리건 후 덱 상태 불변, 하이퍼기하 확률값, 기준가 이상치 제거, `sample_size<3` 시 산출 불가, 컬렉션 총액 |
-| 단위 | Vitest | `workers/crawler/src/adapters` | 픽스처 HTML → `Listing` 정규화(가격 · 통화 · 상태 · 등급 파싱), 파싱 실패 시 graceful skip |
-| 통합 | Vitest + MSW | Route Handlers | 쿼터 초과 429, `cardId` 배열 요청 400, 비소유자 스트림 접근 403, 미인증 쓰기 401 |
+| 단위 | Vitest | `src/components/common` | 에러 경계 폴백 · reset |
+| 단위 | Vitest | `workers/crawler/src/adapters` | 픽스처 HTML → `Listing` 정규화, 파싱 실패 시 graceful skip |
 | 통합 | vitest-pool-workers | 워커 | 토큰 재사용 거부, 만료 토큰 거부, 잘못된 서명 거부 |
-| E2E | Playwright | 핵심 흐름 | ① 카드 검색 → 상세 → 매물 조회 연출 완주(8초 이상 소요 확인) ② 덱 빌더 → 첫 손패 드로우(게임별 매수) → 멀리건 ③ 로그인 → 컬렉션 추가 → 공유 링크 |
+| E2E | Playwright | 앱 셸 | 홈 렌더 · 내비 이동 · 타이틀 템플릿 · 다크 모드 토글 |
+| E2E | Playwright | 도감 | 검색어 URL 동기화 · URL 복원 · 빈 결과 안내 · 게임 필터 |
+| E2E | Playwright | 관리자 | 미인증 접근 차단 · 잘못된 토큰 거부 · API 401 · **세트→카드 등록→도감 반영** · 중복 코드 차단 |
+
+**데이터 의존 금지.** 도감 E2E는 카드가 몇 장 있는지를 전제하지 않는다. 카탈로그는 관리자가 직접 채우므로 양이 고정되지 않는다. 등록 후 반영은 관리자 E2E가 자기 데이터를 만들어 검증한다.
 
 **Developer 규칙:** 각 태스크는 `실패하는 테스트 커밋` → `구현 커밋` 순서를 지킨다 (AGENT.md).
 
@@ -732,109 +741,68 @@ CRAWLER_SHARED_SECRET=
 
 ## 8. 구현 로드맵
 
+완료 항목은 한 줄로 남긴다. 무엇을 왜 그렇게 했는지는 해당 절(§)에 있다.
+
 ### Phase 1 — 기반 구축
 
-- [x] **T1.1** 저장소 초기화 — 완료
-  - `git init`(main) + origin `https://github.com/SiHo4829/deckbinder.git` + `.gitignore`
-  - Next.js 16.3.2 스캐폴딩 (App Router · TS strict · Tailwind v4 · src-dir · `@/*` 별칭)
-  - §2.3 npm scripts 등록, §2.5 툴체인 버전 고정
-  - Vitest(jsdom + Testing Library) · Playwright 설정 및 하네스 검증
-  - 검증: `lint` ✅ / `typecheck` ✅ / `test` ✅ 3건 / `build` ✅ / `test:e2e` ✅ 1건
-  - **E2E는 전용 포트 3100 사용** — 3000번은 다른 프로젝트와 충돌하며, `reuseExistingServer: false`로 외부 서버 오접속을 차단한다
-  - 부수 산출물: `src/components/common/empty-state.tsx`(+테스트) — 하네스 검증 겸 §3.2 정의 컴포넌트
-- [x] **T1.2** shadcn/ui 초기화 + 디자인 토큰 정의 — 완료
-  - `components.json`(base=radix / preset=nova / baseColor=neutral), alias 2건 수정 (§2.6)
-  - `src/lib/utils/cn.ts` + 테스트 4건
-  - 기본 컴포넌트 5종 설치: `button` · `dialog` · `sheet` · `select` · `skeleton`
-  - `globals.css` 토큰 계층 + 프로젝트 토큰(게임 아이덴티티 2종) 별도 블록
-  - 수정: shadcn이 생성한 `--font-sans: var(--font-sans)` 자기참조를 `var(--font-geist-sans)`로 교정 (미교정 시 `@apply font-sans`가 무효)
-  - 검증: `lint` ✅ / `typecheck` ✅ / `test` ✅ 7건 / `build` ✅ + 빌드 CSS에 게임 토큰 반영 확인
-- [x] **T1.3** 루트 레이아웃 · 라우트 그룹 · 앱 셸 — 완료
-  - 루트 레이아웃: `ThemeProvider` + `Header` + `main` + `Footer`, 타이틀 템플릿(`%s | 덱바인더`)
-  - **다크 모드 해소** — `next-themes`(`attribute="class"`, `defaultTheme="system"`) 도입으로 T1.2에서 끊겼던 `.dark` 토큰이 동작. `<html suppressHydrationWarning>` 필요
-  - 라우트 그룹: `(content)` 좁은 단일 컬럼(max-w-3xl) / `(app)` 넓은 컨테이너(max-w-6xl)
-  - `common/`: header · main-nav · mobile-nav · footer · theme-provider · theme-toggle · error-boundary
-  - `src/lib/navigation.ts` — 데스크톱 · 모바일 내비가 공유하는 단일 정의
-  - `app/error.tsx`(라우트 에러) + `common/error-boundary.tsx`(기능 단위 경계, 테스트 5건)
-  - **플레이스홀더 페이지 4종** — `/cards` `/decks` `/binder` `/news`. 내비 목적지를 만들어 셸을 실제로 검증하기 위한 것으로, 각각 T1.7 · T2.4 · T3.3 · T1.9에서 대체된다
-  - 검증: `lint` ✅ / `typecheck` ✅ / `test` ✅ 12건 / `build` ✅ 6라우트 정적 생성 / `test:e2e` ✅ 4건(내비 이동 · 타이틀 템플릿 · 다크 모드 토글 포함)
-  - 미포함: **TanStack Query 프로바이더는 T1.7로 미룸** — 실제 사용처가 생길 때 도입해야 미사용 의존성이 남지 않는다
-- [x] **T1.4** Supabase 연결 + 환경변수 검증 — 완료
-  - `env.ts`(`parseEnv` 헬퍼 + 클라이언트 변수, 테스트 5건) / **`env.server.ts` 신설** — 시크릿을 `server-only`로 분리해 클라이언트 번들 유입을 빌드 단계에서 차단
-  - `supabase/client.ts`(브라우저) · `server.ts`(RSC·핸들러, **`await cookies()`** §2.4) · `admin.ts`(service_role, RLS 우회 경고 주석)
-  - `.env.example`(템플릿) + `.env.local`(gitignore 확인 완료) — 크롤러 변수는 T2.9에 주석 처리
-  - Vitest에 더미 환경변수 주입 — `env.ts`가 모듈 로드 시 검증하므로 테스트에도 유효 값이 필요
-  - 검증: `lint` ✅ / `typecheck` ✅ / `test` ✅ 18건 / `build` ✅ / `test:e2e` ✅ 4건
-  - ⚠️ **실제 Supabase 자격증명 미입력 상태** — `.env.local`을 채우기 전까지 실제 연결은 검증되지 않았다. 첫 실연결 검증은 T1.5 마이그레이션에서 이뤄진다
-- [x] **T1.5** 마이그레이션 001 — 완료 (로컬 리허설 후 원격 적용 · 검증)
-  - `supabase/migrations/20260823000001_card_master.sql` — 테이블 6개 · 인덱스 9개 · RLS 정책 6개 · 트리거 2개 · 게임 룰 2행
-  - `supabase init` + 원격 link(`rqduciqmfvkpvtezzfwu`, PG 17.6, ap-northeast-2), `db:reset` / `db:migrate` 스크립트 등록
-  - 로컬 검증: search_vector 트리거(한국어 토큰화) · updated_at 트리거 · 복합 FK 게임 혼입 차단 · anon 읽기 허용 / 쓰기 거부 · service_role 쓰기 허용
-  - 원격 검증: `games` 2행 조회 200 / `cards` 조회 200 / anon INSERT 42501 거부
-  - ⚠️ **GRANT 누락 버그를 로컬 리허설에서 발견** — 아래 §4.1-1 참조
-- [ ] **T1.5a** (권장) 로컬 스택 상시 사용 — Docker Desktop 설치 완료. 이후 모든 마이그레이션은 `npm run db:reset`으로 리허설한 뒤 `db:migrate`한다
-- [x] **T1.5b** 마이그레이션 002 — 완료 (로컬 리허설 → 원격 적용 · 검증)
-  - `20260823000002_fix_card_name_nullability.sql` — `name_ja` → `not null`, `name_ko` → nullable, `cards_name_ja_trgm_idx` 추가
-  - 로컬 검증: `name_ko` 없이 INSERT 성공 / `name_ja` 없이 INSERT는 not-null 위반 / `name_ko`가 NULL이어도 search_vector 트리거 정상(`'ストライク':1A`)
-  - 원격 검증: 동일 2건 (201 / `23502`), 마이그레이션 이력 local↔remote 동기화 확인
-- [ ] **T1.6** `scripts/seed.ts` + 초기 카드 데이터 투입 — 원천은 §4.4에서 확정
-  - [x] **T1.6a ptcg 일본어: 완료** — 세트 183개 · 카드 **12,619장** 적재 (실패 0건)
-    - `scripts/seed.ts` + `src/lib/domain/ingest/tcgdex.ts`(순수 매퍼, 테스트 14건)
-    - `--enrich-only [--card-type=X]` 모드 — 매핑 수정 시 전체 재수집 없이 대상만 재보강
-    - 재실행 멱등성 확인 (2회 실행 후 총계 불변)
-  - T1.6b ptcg 한국어: `pokemoncard.co.kr` 스크래핑 → 코드 매칭으로 `name_ko` 갱신
-  - T1.6c opcg 일본어: `onepiece-cardgame.com` 스크래핑
-  - T1.6d opcg 한국어: `onepiece-cardgame.kr` 스크래핑 (2024-03 이후 세트만 존재)
-  - T1.6e 효과 키워드 자동 태깅 + 수동 보정
-- [x] **T1.7** `GET /api/cards` + 도감 페이지 — 완료
-  - `src/lib/validation/card.ts`(검색 파라미터 zod, 테스트 8건) · `app/api/cards/route.ts`(커서 페이지네이션, limit 상한 100)
-  - TanStack Query 프로바이더 + nuqs 어댑터를 루트 레이아웃에 연결 (T1.3에서 이관한 항목)
-  - `features/cards/`: card-browser · card-filter-panel · card-grid · use-card-search(무한스크롤)
-  - 검증: `lint` `typecheck` `build` ✅ / `test` 40건 ✅ / `test:e2e` 9건 ✅ (도감 5건 신규 — 목록·검색·URL 복원·빈 결과·무한스크롤)
-  - **미포함(후속)**: 레어도 · 속성 · 발매 팩 · 효과 키워드 필터 → **T1.7b**. PostgREST가 DISTINCT를 지원하지 않아 facets용 RPC/뷰가 선행 필요하다. 효과 키워드는 T1.6e 태깅 이후에나 의미가 있다
-- [ ] **T1.7b** 필터 확장 — facets RPC(또는 뷰) + 레어도 · 속성 · 발매 팩 · 키워드 필터
-- [ ] **T1.8** 카드 상세 + `base-price-badge` + `similar-cards`(대체 카드 그룹)
-- [ ] **T1.9** 뉴스 모듈: 마이그레이션 + 목록 / 상세(ISR) + `sitemap.ts` / `robots.ts` + 개인정보처리방침 · 면책 페이지 (애드센스 심사 요건)
+- [x] **T1.1** 저장소 · Next 16 스캐폴딩 · npm scripts · Vitest/Playwright 하네스 (§2.3, §2.5)
+- [x] **T1.2** shadcn/ui 초기화 + 디자인 토큰 (§2.6)
+- [x] **T1.3** 루트 레이아웃 · 라우트 그룹 · 앱 셸 · 다크 모드
+- [x] **T1.4** Supabase 연결 · 환경변수 검증 (§6)
+- [x] **T1.5** 마이그레이션 001 — 카드 마스터 스키마 · 인덱스 · RLS · GRANT (§4.1)
+- [x] **T1.5b/003** `name_ja`/`name_ko` nullability 교정 (cards · card_sets) (§4.4)
+- [x] **T1.6-A** 관리자 등록 화면 — 인증 · 세트/카드 등록 · 대시보드 (§4.5)
+- [x] **T1.7** `GET /api/cards` + 도감 (검색 · URL 동기화 · 무한스크롤)
+- [x] **T1.7b** 필터 확장 — 완료
+  - 마이그레이션 004: `search_cards` · `card_facets` SQL 함수 (+ EXECUTE 권한)
+  - 레어도 · 속성 · 종류 · 발매 팩 셀렉트(건수 표기) + **효과 키워드 AND 조합** 칩
+  - 관리자: `/admin/keywords` 등록, 카드 폼에서 키워드 태깅
+  - 검증: `test` 44건 ✅ / `test:e2e` 19건 ✅ (필터 5건 신규 — 레어도 · 키워드 단일/조합 · 칩 토글 · 게임 전환 시 초기화)
+- [ ] **T1.8** 카드 상세 (`/cards/[cardId]`) — 기준가 · 대체 카드
+- [ ] **T1.9** 뉴스 모듈 — 목록/상세(ISR) · `sitemap.ts` · `robots.ts` · 개인정보처리방침 · 면책 (애드센스 심사 요건)
+
+**관리자 화면 후속** (T1.6-A에서 미포함)
+
+- [ ] 카드 수정 · 삭제 UI (API는 있음)
+- [ ] 등록 카드 목록 — 검색 · 페이지네이션 (대시보드는 최근 20건만)
+- [ ] CSV 일괄 등록 — 수백 장 입력 시 폼 하나씩은 부담
+- [ ] 세트 수정 · 삭제
+- [ ] `similar_groups`(대체 카드) 등록 화면
+- [ ] 키워드 수정 · 삭제, 기존 카드의 키워드 재태깅
 
 ### Phase 2 — 핵심 유틸리티
 
-- [ ] **T2.1** `src/lib/domain/simulator` TDD 구현 (shuffle / draw / mulligan / probability) — 손패 매수를 게임 룰로 주입받아 ptcg 7장 · opcg 5장을 모두 커버
-- [ ] **T2.2** `src/lib/domain/deck` 검증 · 통계 TDD 구현 — ptcg 60장 / opcg 50장, 4장 제한(기본 에너지 예외), opcg 리더 색상 일치 검증
-- [ ] **T2.3** 마이그레이션 002 — decks / deck_cards + RLS
-- [ ] **T2.4** 덱 레시피 목록 · 티어표 · 상세 페이지
-- [ ] **T2.5** 덱 빌더 UI (`deck-builder-store.ts`) + 첫 손패 드로우 · 멀리건 UI
-- [ ] **T2.6** `workers/crawler` 스캐폴딩 (Hono + wrangler + vitest-pool-workers)
-- [ ] **T2.7** 어댑터 3종 TDD 구현 (메르카리 · 라쿠마 · 야후옥션, 픽스처 기반)
+- [ ] **T2.1** `src/lib/domain/simulator` — 손패 매수를 게임 룰로 주입 (ptcg 7장 / opcg 5장)
+- [ ] **T2.2** `src/lib/domain/deck` 검증 · 통계 — ptcg 60장 / opcg 50장, 4장 제한(기본 에너지 예외), opcg 리더 색상 일치
+- [ ] **T2.3** 마이그레이션 002 — decks / deck_cards + RLS + GRANT
+- [ ] **T2.4** 덱 레시피 목록 · 티어표 · 상세
+- [ ] **T2.5** 덱 빌더 UI + 첫 손패 드로우 · 멀리건
+- [ ] **T2.6** `workers/crawler` 스캐폴딩 (Hono + wrangler)
+- [ ] **T2.7** 어댑터 3종 (메르카리 · 라쿠마 · 야후옥션) — **착수 전 §9.2 약관 검토 필수**
 - [ ] **T2.8** 마이그레이션 003 — market_sessions / card_prices
-- [ ] **T2.9** `POST /api/market/session` (쿼터 + HMAC 토큰) + Durable Object 카운터
+- [ ] **T2.9** `POST /api/market/session` (쿼터 + HMAC) + Durable Object
 - [ ] **T2.10** `GET /api/market/stream/:id` SSE + 서버 페이싱 연출
-- [ ] **T2.11** 매물 결과 UI (`progressive-loader` · `condition-filter` 3종 · `listing-list`) + 덱 상세에서 매물 검색 진입
-- [ ] **T2.12** 기준가 파이프라인 (`src/lib/domain/pricing` + 수집 배치)
+- [ ] **T2.11** 매물 결과 UI (진행 연출 · 상태 필터 3종)
+- [ ] **T2.12** 기준가 파이프라인 (§4.3)
 
 ### Phase 3 — 개인화 및 고도화
 
-- [ ] **T3.1** Google / Kakao OAuth + `auth/callback` + `profiles` 생성 트리거
-- [ ] **T3.2** 마이그레이션 004 — collection_items / binder_shares + RLS + `v_public_binder` 뷰
-- [ ] **T3.3** 가상 3공 바인더 UI (페이지 넘김 애니메이션) + 위시리스트
-- [ ] **T3.4** 컬렉션 총 가치 계산 · 표시
-- [ ] **T3.5** 공유 바인더 페이지 + 동적 OG 이미지 (`opengraph-image.tsx`)
-- [ ] **T3.6** 제휴 링크 캐러셀 (`common/affiliate-carousel.tsx`)
-- [ ] **T3.7** Playwright E2E 3종 시나리오 + GitHub Actions CI 연동
+- [ ] **T3.1** Google / Kakao OAuth + `proxy.ts` 세션 갱신 + `profiles`
+  - **관리자 권한을 여기서 계정 기반으로 교체한다** (§4.5의 토큰 방식은 임시)
+- [ ] **T3.2** 마이그레이션 004 — collection_items / binder_shares + RLS + GRANT + 공개 뷰
+- [ ] **T3.3** 가상 3공 바인더 + 위시리스트
+- [ ] **T3.4** 컬렉션 총 가치
+- [ ] **T3.5** 공유 바인더 + 동적 OG 이미지
+- [ ] **T3.6** 제휴 링크 캐러셀
+- [ ] **T3.7** E2E 시나리오 확장 + GitHub Actions CI
 
 ---
 
-## 9. 결정이 필요한 사항 (Architect → 사용자)
+## 9. 미해결 — 결정이 필요한 사항
 
-1. ~~**초기 지원 TCG 범위**~~ → **확정: 포켓몬(`ptcg`) + 원피스(`opcg`) 2종, 유희왕 제외.** 상세 룰과 스키마 영향은 §4.0 참조.
-2. ~~**카드 데이터 원천**~~ → **확정 (§4.4 실측)**: ptcg 일본어는 TCGdex(12,619장, 키 불필요), opcg 일본어는 공식 JP 사이트 스크래핑. **한국어는 두 게임 모두 공식 한국 사이트 스크래핑**으로만 확보 가능하며 커버리지가 부분적이다 → `name_ko` nullable 전환 필요(T1.5b).
-3. **카드 이미지 호스팅** — 외부 핫링크 대신 Supabase Storage 또는 Cloudflare R2 캐싱 권장. ptcg는 `assets.tcgdex.net`에서 화질 지정 가능. **저작권 방침 확정 전까지 이미지 없이 동작하는 폴백을 유지한다** (§4.4).
-4. **스크래핑 준수 범위** — 대상 3개 사이트의 이용약관 / `robots.txt` 검토 결과를 `docs/crawler-compliance.md`에 기록해야 한다. 차단 시 대체 전략(공식 API · 제휴)이 필요하다.
-5. **비로그인 매물 검색 허용 여부** — 허용 시 IP 해시 쿼터만으로 방어해야 하며 우회 여지가 커진다. 로그인 필수면 방어력은 오르나 초기 유입이 줄어든다.
-6. **환율 갱신 주기** — 기준가 KRW 환산 스냅샷 주기(일 1회 권장) 확정 필요.
-
----
-
-## 10. 다음 단계
-
-본 문서 승인 후 Developer 에이전트가 **Phase 1 / T1.1 ~ T1.4**부터 착수한다.
-§9의 1번(초기 TCG 범위)은 T1.5 스키마 확정 전에 답이 필요하다.
+1. **관리자 토큰의 수명** — 지금은 토큰 1개가 곧 전체 쓰기 권한이다. 유출되면 카탈로그 전체를 조작할 수 있다. T3.1까지 이 상태를 유지할지, 더 일찍 계정 기반으로 옮길지.
+2. **일본 중고 매물 사이트 약관** (T2.7 선행) — 메르카리 · 라쿠마 · 야후옥션의 이용약관 검토 결과를 `docs/crawler-compliance.md`에 기록해야 한다. 차단 시 대체 전략(공식 API · 제휴)이 필요하다.
+3. **카드 이미지 저장 방식** — 현재는 관리자가 외부 URL을 직접 입력한다. 핫링크 대신 자체 호스팅(Supabase Storage / R2)으로 갈지, 그 경우 저작권 처리를 어떻게 할지.
+4. **비로그인 매물 검색 허용 여부** — 허용 시 IP 해시 쿼터만으로 방어해야 해 우회 여지가 커진다. 로그인 필수면 방어력은 오르나 초기 유입이 준다.
+5. **환율 갱신 주기** — 기준가 KRW 환산 스냅샷 주기(일 1회 권장).
+6. **Node 버전** — 현재 20.15.1로 테스트 툴체인 4개를 하향 고정한 상태다(§2.5). 22 LTS로 올리면 해소된다.

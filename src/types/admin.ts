@@ -1,0 +1,30 @@
+/** 관리자 화면이 다루는 참조 데이터. UI 컴포넌트가 아니라 여기서 정의한다. */
+
+export interface GameOption {
+  id: string;
+  code: string;
+  name_ko: string;
+}
+
+export interface SetOption {
+  id: string;
+  code: string;
+  name_ja: string;
+  game_id: string;
+}
+
+export interface KeywordOption {
+  id: string;
+  code: string;
+  label_ko: string;
+  game_id: string;
+}
+
+export interface AdminCardRow {
+  id: string;
+  code: string;
+  name_ja: string;
+  name_ko: string | null;
+  rarity: string | null;
+  card_type: string | null;
+}

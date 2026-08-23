@@ -1,0 +1,79 @@
+import { z } from "zod";
+
+/**
+ * 관리자 등록 입력 스키마.
+ * 폼은 빈 문자열을 보내므로 선택 항목은 null로 정규화해 DB에 그대로 넣는다.
+ */
+
+const required = (field: string) =>
+  z
+    .string({ error: `${field}는 필수입니다.` })
+    .trim()
+    .min(1, `${field}는 필수입니다.`);
+
+// .default(null)이 있어야 객체에서 키 자체를 생략할 수 있다.
+const optional = z
+  .string()
+  .nullish()
+  .default(null)
+  .transform((v) => {
+    const trimmed = typeof v === "string" ? v.trim() : "";
+    return trimmed.length > 0 ? trimmed : null;
+  });
+
+const optionalUrl = optional.refine(
+  (v) => v === null || z.url().safeParse(v).success,
+  "올바른 URL이 아닙니다.",
+);
+
+const optionalDate = optional.refine(
+  (v) => v === null || /^\d{4}-\d{2}-\d{2}$/.test(v),
+  "발매일은 YYYY-MM-DD 형식이어야 합니다.",
+);
+
+export const setInputSchema = z.object({
+  game_id: z.uuid(),
+  code: required("세트 코드"),
+  name_ja: required("일본어 세트명"),
+  name_ko: optional,
+  released_at: optionalDate,
+});
+
+export type SetInput = z.infer<typeof setInputSchema>;
+
+export const keywordInputSchema = z.object({
+  game_id: z.uuid(),
+  /** 필터 URL과 검색 함수에 쓰이는 안정적인 식별자 */
+  code: required("키워드 코드")
+    .regex(/^[a-z0-9_]+$/, "키워드 코드는 소문자·숫자·밑줄만 쓸 수 있습니다."),
+  label_ko: required("한국어 표기"),
+  label_ja: optional,
+});
+
+export type KeywordInput = z.infer<typeof keywordInputSchema>;
+
+export const cardInputSchema = z.object({
+  game_id: z.uuid(),
+  set_id: z
+    .string()
+    .nullish()
+    .default(null)
+    .transform((v) => (typeof v === "string" && v.trim().length > 0 ? v.trim() : null))
+    .refine((v) => v === null || z.uuid().safeParse(v).success, "세트 선택이 올바르지 않습니다."),
+  code: required("카드 코드"),
+  // name_ja는 크롤러가 일본 중고 매물을 검색하는 유일한 키다 (plan §4.4).
+  name_ja: required("name_ja (일본어 카드명)"),
+  name_ko: optional,
+  name_en: optional,
+  rarity: optional,
+  attribute: optional,
+  card_type: optional,
+  /** basic_energy면 덱 매수 제한에서 면제된다 (plan §4.0) */
+  sub_type: optional,
+  image_url: optionalUrl,
+  effect_text: optional,
+  /** 효과 키워드. card_keywords에 별도로 넣는다. */
+  keyword_ids: z.array(z.uuid()).nullish().default([]).transform((v) => v ?? []),
+});
+
+export type CardInput = z.infer<typeof cardInputSchema>;

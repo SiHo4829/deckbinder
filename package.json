@@ -12,8 +12,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "db:reset": "supabase db reset",
-    "db:migrate": "supabase db push",
-    "db:seed": "tsx --env-file=.env.local scripts/seed.ts"
+    "db:migrate": "supabase db push"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

@@ -20,6 +20,7 @@ export const cardSearchParamsSchema = z.object({
   rarity: optionalText,
   attribute: optionalText,
   cardType: optionalText,
+  /** 선택한 키워드를 **모두** 가진 카드만 남긴다 (AND 조합) */
   keywords: z.array(z.string().trim().min(1)).default([]),
   cursor: optionalText,
   // URL은 사용자가 직접 고칠 수 있으므로 범위를 벗어나면 400 대신 상한으로 잘라낸다.
@@ -37,15 +38,19 @@ export const cardSearchParamsSchema = z.object({
 
 export type CardSearchParams = z.infer<typeof cardSearchParamsSchema>;
 
-/** URLSearchParams를 스키마 입력 형태로 정규화한다. */
-export function parseCardSearchParams(params: URLSearchParams): CardSearchParams {
-  const keywords = params
-    .getAll("keywords")
+/** 반복 키와 쉼표 구분을 모두 배열로 모은다. */
+function collectList(params: URLSearchParams, key: string): string[] {
+  return params
+    .getAll(key)
     .flatMap((value) => value.split(","))
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
+}
 
-  const raw: Record<string, unknown> = { keywords };
+/** URLSearchParams를 스키마 입력 형태로 정규화한다. */
+export function parseCardSearchParams(params: URLSearchParams): CardSearchParams {
+  const raw: Record<string, unknown> = { keywords: collectList(params, "keywords") };
+
   for (const key of ["q", "game", "set", "rarity", "attribute", "cardType", "cursor"]) {
     const value = params.get(key);
     if (value !== null && value.trim().length > 0) raw[key] = value;

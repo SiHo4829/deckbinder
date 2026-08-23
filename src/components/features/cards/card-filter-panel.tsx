@@ -3,6 +3,7 @@
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { KeywordFilter } from "@/components/features/cards/keyword-filter";
 import {
   Select,
   SelectContent,
@@ -10,6 +11,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils/cn";
+import { CONTROL_CLASS_SM } from "@/lib/utils/form";
+import type { CardFacets } from "@/types/card";
 
 const ALL = "__all__";
 
@@ -19,83 +23,160 @@ const GAME_OPTIONS = [
   { value: "opcg", label: "원피스" },
 ];
 
-const CARD_TYPE_OPTIONS = [
-  { value: ALL, label: "전체 종류" },
-  { value: "Pokemon", label: "포켓몬" },
-  { value: "Trainer", label: "트레이너" },
-  { value: "Energy", label: "에너지" },
-];
-
-interface CardFilterPanelProps {
+export interface CardFilters {
   q: string;
   game: string;
   cardType: string;
-  onChange: (patch: { q?: string; game?: string; cardType?: string }) => void;
+  rarity: string;
+  attribute: string;
+  set: string;
+  keywords: string[];
 }
 
-export function CardFilterPanel({ q, game, cardType, onChange }: CardFilterPanelProps) {
+interface Props {
+  filters: CardFilters;
+  facets: CardFacets | undefined;
+  onChange: (patch: Partial<CardFilters>) => void;
+}
+
+/** 선택지가 없으면 셀렉트 자체를 감춘다. 빈 드롭다운은 혼란만 준다. */
+function FacetSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+}) {
+  if (options.length === 0) return null;
+
+  return (
+    <Select value={value || ALL} onValueChange={(v) => onChange(v === ALL ? "" : v)}>
+      <SelectTrigger className="sm:w-40" aria-label={label}>
+        <SelectValue placeholder={label} />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={ALL}>{label} 전체</SelectItem>
+        {options.map((o) => (
+          <SelectItem key={o.value} value={o.value}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+export function CardFilterPanel({ filters, facets, onChange }: Props) {
   // 타이핑마다 요청하지 않도록 입력을 로컬에 두고 지연 반영한다.
-  const [draft, setDraft] = useState(q);
+  const [draft, setDraft] = useState(filters.q);
 
   // 외부(URL)에서 q가 바뀌면 렌더 중에 맞춘다.
   // effect에서 setState 하면 react-hooks/set-state-in-effect에 걸린다.
-  const [syncedQ, setSyncedQ] = useState(q);
-  if (q !== syncedQ) {
-    setSyncedQ(q);
-    setDraft(q);
+  const [syncedQ, setSyncedQ] = useState(filters.q);
+  if (filters.q !== syncedQ) {
+    setSyncedQ(filters.q);
+    setDraft(filters.q);
   }
 
   useEffect(() => {
-    if (draft === q) return;
+    if (draft === filters.q) return;
     const timer = setTimeout(() => onChange({ q: draft }), 300);
     return () => clearTimeout(timer);
-  }, [draft, q, onChange]);
+  }, [draft, filters.q, onChange]);
+
+  const toOptions = (values: { value: string; count: number }[]) =>
+    values.map((v) => ({ value: v.value, label: `${v.value} (${v.count})` }));
+
+  function toggleKeyword(code: string) {
+    onChange({
+      keywords: filters.keywords.includes(code)
+        ? filters.keywords.filter((c) => c !== code)
+        : [...filters.keywords, code],
+    });
+  }
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-      <div className="relative flex-1">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="search"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="카드 이름으로 검색 (일본어·한국어)"
-          aria-label="카드 이름 검색"
-          className="h-9 w-full rounded-md border bg-transparent pr-3 pl-9 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="search"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="카드 이름으로 검색 (일본어·한국어)"
+            aria-label="카드 이름 검색"
+            className={cn(CONTROL_CLASS_SM, "py-0 pr-3 pl-9")}
+          />
+        </div>
+
+        <Select
+          value={filters.game || ALL}
+          // 게임이 바뀌면 이전 게임의 선택지가 남지 않도록 하위 필터를 비운다.
+          onValueChange={(v) =>
+            onChange({
+              game: v === ALL ? "" : v,
+              rarity: "",
+              attribute: "",
+              cardType: "",
+              set: "",
+              keywords: [],
+            })
+          }
+        >
+          <SelectTrigger className="sm:w-36" aria-label="게임 선택">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {GAME_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <FacetSelect
+          label="종류"
+          value={filters.cardType}
+          options={toOptions(facets?.cardType ?? [])}
+          onChange={(v) => onChange({ cardType: v })}
+        />
+        <FacetSelect
+          label="레어도"
+          value={filters.rarity}
+          options={toOptions(facets?.rarity ?? [])}
+          onChange={(v) => onChange({ rarity: v })}
+        />
+        <FacetSelect
+          label="속성"
+          value={filters.attribute}
+          options={toOptions(facets?.attribute ?? [])}
+          onChange={(v) => onChange({ attribute: v })}
+        />
+        <FacetSelect
+          label="발매 팩"
+          value={filters.set}
+          options={(facets?.sets ?? []).map((s) => ({
+            value: s.id,
+            label: `${s.code} · ${s.label}`,
+          }))}
+          onChange={(v) => onChange({ set: v })}
         />
       </div>
 
-      <Select
-        value={game || ALL}
-        onValueChange={(v) => onChange({ game: v === ALL ? "" : v })}
-      >
-        <SelectTrigger className="sm:w-36" aria-label="게임 선택">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {GAME_OPTIONS.map((o) => (
-            <SelectItem key={o.value} value={o.value}>
-              {o.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select
-        value={cardType || ALL}
-        onValueChange={(v) => onChange({ cardType: v === ALL ? "" : v })}
-      >
-        <SelectTrigger className="sm:w-36" aria-label="카드 종류 선택">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {CARD_TYPE_OPTIONS.map((o) => (
-            <SelectItem key={o.value} value={o.value}>
-              {o.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <KeywordFilter
+        keywords={facets?.keywords ?? []}
+        selected={filters.keywords}
+        onToggle={toggleKeyword}
+        onClear={() => onChange({ keywords: [] })}
+      />
     </div>
   );
 }

@@ -23,3 +23,17 @@ export interface CardListResponse {
 export function cardDisplayName(card: Pick<CardListItem, "name_ko" | "name_ja">): string {
   return card.name_ko ?? card.name_ja;
 }
+
+export interface FacetValue {
+  value: string;
+  count: number;
+}
+
+export interface CardFacets {
+  rarity: FacetValue[];
+  attribute: FacetValue[];
+  cardType: FacetValue[];
+  sets: { id: string; code: string; label: string }[];
+  /** 효과 키워드. 여러 개를 고르면 **모두** 가진 카드만 남는다 (AND). */
+  keywords: { code: string; label: string }[];
+}

@@ -1,12 +1,18 @@
 "use client";
 
-import { parseAsString, useQueryStates } from "nuqs";
+import { parseAsArrayOf, parseAsString, useQueryStates } from "nuqs";
 import { useCallback, useEffect, useRef } from "react";
 
-import { CardFilterPanel } from "@/components/features/cards/card-filter-panel";
-import { CardGrid, CardGridSkeleton } from "@/components/features/cards/card-grid";
-import { useCardSearch } from "@/components/features/cards/use-card-search";
 import { EmptyState } from "@/components/common/empty-state";
+import {
+  CardFilterPanel,
+  type CardFilters,
+} from "@/components/features/cards/card-filter-panel";
+import { CardGrid, CardGridSkeleton } from "@/components/features/cards/card-grid";
+import {
+  useCardFacets,
+  useCardSearch,
+} from "@/components/features/cards/use-card-search";
 import { Button } from "@/components/ui/button";
 
 // 필터는 URL에 실어 링크 공유와 SEO 색인을 가능하게 한다 (plan §4.2).
@@ -14,6 +20,10 @@ const filterParsers = {
   q: parseAsString.withDefault(""),
   game: parseAsString.withDefault(""),
   cardType: parseAsString.withDefault(""),
+  rarity: parseAsString.withDefault(""),
+  attribute: parseAsString.withDefault(""),
+  set: parseAsString.withDefault(""),
+  keywords: parseAsArrayOf(parseAsString).withDefault([]),
 };
 
 export function CardBrowser() {
@@ -22,9 +32,16 @@ export function CardBrowser() {
     shallow: true,
   });
 
-  const query = useCardSearch(filters);
-  const { data, isPending, isError, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    query;
+  const facetsQuery = useCardFacets(filters.game);
+  const {
+    data,
+    isPending,
+    isError,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useCardSearch(filters as CardFilters);
 
   const sentinel = useRef<HTMLDivElement>(null);
 
@@ -43,7 +60,7 @@ export function CardBrowser() {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const handleChange = useCallback(
-    (patch: { q?: string; game?: string; cardType?: string }) => {
+    (patch: Partial<CardFilters>) => {
       void setFilters(patch);
     },
     [setFilters],
@@ -61,9 +78,8 @@ export function CardBrowser() {
       </div>
 
       <CardFilterPanel
-        q={filters.q}
-        game={filters.game}
-        cardType={filters.cardType}
+        filters={filters as CardFilters}
+        facets={facetsQuery.data}
         onChange={handleChange}
       />
 

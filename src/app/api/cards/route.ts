@@ -2,11 +2,15 @@ import { NextResponse } from "next/server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { parseCardSearchParams } from "@/lib/validation/card";
+import type { CardListItem } from "@/types/card";
 
-/** 도감 목록에 필요한 컬럼만 고른다. 상세는 /api/cards/[cardId]가 담당한다. */
-const LIST_COLUMNS =
-  "id,code,name_ko,name_ja,rarity,attribute,card_type,sub_type,image_url,set_id";
-
+/**
+ * 도감 검색.
+ *
+ * 필터 조합을 SQL 함수(search_cards)에 맡긴다. 키워드 "조합" 검색은
+ * 선택한 키워드를 모두 가진 카드를 찾는 AND 교집합인데, PostgREST 쿼리
+ * 빌더로는 표현할 수 없다(임베드 필터는 OR가 된다). 마이그레이션 004 참조.
+ */
 export async function GET(request: Request) {
   const url = new URL(request.url);
 
@@ -22,40 +26,18 @@ export async function GET(request: Request) {
 
   const supabase = await createSupabaseServerClient();
 
-  // code는 (game_id, code) 유니크라 게임 내에서 고유하다.
-  // 커서 기준으로 안정적인 정렬 키가 된다.
-  let query = supabase
-    .from("cards")
-    .select(LIST_COLUMNS)
-    .order("code", { ascending: true })
-    .limit(params.limit + 1);
-
-  if (params.game) {
-    const { data: game } = await supabase
-      .from("games")
-      .select("id")
-      .eq("code", params.game)
-      .maybeSingle();
-    if (!game) {
-      return NextResponse.json({ items: [], nextCursor: null });
-    }
-    query = query.eq("game_id", game.id);
-  }
-
-  if (params.set) query = query.eq("set_id", params.set);
-  if (params.rarity) query = query.eq("rarity", params.rarity);
-  if (params.attribute) query = query.eq("attribute", params.attribute);
-  if (params.cardType) query = query.eq("card_type", params.cardType);
-  if (params.cursor) query = query.gt("code", params.cursor);
-
-  // 일본어는 공백이 없어 tsvector가 이름 전체를 토큰 하나로 잡는다.
-  // 부분일치는 pg_trgm 인덱스를 타는 ilike가 실질적으로 유효하다 (plan §4.4).
-  if (params.q) {
-    const pattern = `%${params.q.replace(/[%_]/g, "\\$&")}%`;
-    query = query.or(`name_ja.ilike.${pattern},name_ko.ilike.${pattern}`);
-  }
-
-  const { data, error } = await query;
+  // 다음 페이지 존재 여부를 알기 위해 1건 더 받는다.
+  const { data, error } = await supabase.rpc("search_cards", {
+    p_q: params.q ?? null,
+    p_game_code: params.game ?? null,
+    p_set_id: params.set ?? null,
+    p_rarity: params.rarity ?? null,
+    p_attribute: params.attribute ?? null,
+    p_card_type: params.cardType ?? null,
+    p_keyword_codes: params.keywords.length > 0 ? params.keywords : null,
+    p_cursor: params.cursor ?? null,
+    p_limit: params.limit + 1,
+  });
 
   if (error) {
     console.error("[GET /api/cards]", error.message);
@@ -65,7 +47,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const rows = data ?? [];
+  const rows = (data ?? []) as CardListItem[];
   const hasMore = rows.length > params.limit;
   const items = hasMore ? rows.slice(0, params.limit) : rows;
 

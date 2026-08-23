@@ -9,5 +9,6 @@ export const queryKeys = {
     all: ["cards"] as const,
     list: (params: KeyParams) => [...queryKeys.cards.all, "list", params] as const,
     detail: (cardId: string) => [...queryKeys.cards.all, "detail", cardId] as const,
+    facets: (game: string) => [...queryKeys.cards.all, "facets", game] as const,
   },
 } as const;
