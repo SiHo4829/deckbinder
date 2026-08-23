@@ -2,6 +2,8 @@ import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
 
+import type { Database } from "@/types/database";
+
 import { clientEnv } from "@/lib/env";
 import { serverEnv } from "@/lib/env.server";
 
@@ -16,7 +18,7 @@ import { serverEnv } from "@/lib/env.server";
  * 여기서 처리하면 RLS 검사가 사라져 남의 데이터에 접근할 수 있다.
  */
 export function createSupabaseAdminClient() {
-  return createClient(
+  return createClient<Database>(
     clientEnv.NEXT_PUBLIC_SUPABASE_URL,
     serverEnv.SUPABASE_SERVICE_ROLE_KEY,
     {

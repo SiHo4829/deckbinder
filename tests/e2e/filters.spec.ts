@@ -13,6 +13,10 @@ async function login(page: Page) {
   await expect(page).toHaveURL(/\/admin$/);
 }
 
+// beforeAll이 만든 데이터를 모든 테스트가 공유한다.
+// 병렬로 돌리면 워커마다 beforeAll이 다시 실행되어 같은 데이터를 중복 생성한다.
+test.describe.configure({ mode: "serial" });
+
 /**
  * 필터는 등록된 데이터에 의존한다. 테스트가 자기 데이터를 만들어 쓰고,
  * 고유 접두사로 다른 테스트와 섞이지 않게 한다.

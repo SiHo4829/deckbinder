@@ -28,14 +28,15 @@ export async function GET(request: Request) {
 
   // 다음 페이지 존재 여부를 알기 위해 1건 더 받는다.
   const { data, error } = await supabase.rpc("search_cards", {
-    p_q: params.q ?? null,
-    p_game_code: params.game ?? null,
-    p_set_id: params.set ?? null,
-    p_rarity: params.rarity ?? null,
-    p_attribute: params.attribute ?? null,
-    p_card_type: params.cardType ?? null,
-    p_keyword_codes: params.keywords.length > 0 ? params.keywords : null,
-    p_cursor: params.cursor ?? null,
+    // 생성된 DB 타입은 선택 인자를 undefined(생략)로 받는다. null은 타입 오류다.
+    p_q: params.q,
+    p_game_code: params.game,
+    p_set_id: params.set,
+    p_rarity: params.rarity,
+    p_attribute: params.attribute,
+    p_card_type: params.cardType,
+    p_keyword_codes: params.keywords.length > 0 ? params.keywords : undefined,
+    p_cursor: params.cursor,
     p_limit: params.limit + 1,
   });
 

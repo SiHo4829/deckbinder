@@ -24,6 +24,27 @@ export function cardDisplayName(card: Pick<CardListItem, "name_ko" | "name_ja">)
   return card.name_ko ?? card.name_ja;
 }
 
+export interface CardDetail {
+  id: string;
+  code: string;
+  /** 인쇄본 접미사를 뗀 코드. 대체 카드 판정 기준 (plan §4.6) */
+  base_code: string;
+  game_id: string;
+  set_id: string | null;
+  name_ko: string | null;
+  name_ja: string;
+  name_en: string | null;
+  rarity: string | null;
+  attribute: string | null;
+  card_type: string | null;
+  sub_type: string | null;
+  image_url: string | null;
+  effect_text: string | null;
+  set: { code: string; label: string } | null;
+  game: { code: string; label: string } | null;
+  keywords: { code: string; label: string }[];
+}
+
 export interface FacetValue {
   value: string;
   count: number;
