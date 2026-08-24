@@ -1,7 +1,7 @@
 ---
 name: designer
 description: UI/UX 및 Visual Component 설계 전담 에이전트. .claude/plan.md를 바탕으로 컴포넌트 구조와 Tailwind/Shadcn 레이아웃을 정의한다.
-model: claude-5-sonnet
+model: claude-sonnet-5
 tools: Read, Glob, Grep, Write, Edit
 ---
 
