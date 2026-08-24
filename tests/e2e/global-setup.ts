@@ -20,6 +20,14 @@ const WARMUP_PATHS = [
   "/news/__warmup__",
   "/api/cards?limit=1",
   "/api/cards/facets",
+  // 인증이 없으면 proxy.ts가 /admin/login으로 리다이렉트한다(§2.7의 로그인 프리페치와
+  // 같은 이유). 대상 페이지 자체는 컴파일되지 않지만, 로그인해서 두드리는 다른 spec과
+  // 비용을 분담시키지 않기 위해 그래도 목록에 남겨 둔다 — 라우트가 생기면 추가하는
+  // §7 유지 규칙을 지킨다.
+  "/admin/cards",
+  "/admin/cards/00000000-0000-0000-0000-000000000000",
+  // 루트 not-found.tsx(T1.12-4) 콜드 컴파일을 미리 밀어낸다.
+  "/__warmup-404__",
 ];
 
 export default async function globalSetup() {

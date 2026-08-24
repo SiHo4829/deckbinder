@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { EmptyState } from "@/components/common/empty-state";
 import { Button } from "@/components/ui/button";
 
-export default function GlobalError({
+export default function RouteError({
   error,
   reset,
 }: {

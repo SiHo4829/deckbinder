@@ -171,6 +171,7 @@ shadcn CLI 4.19에서 `-b/--base` 플래그의 의미가 **base color → primit
 | **`server-only` + jsdom 단위 테스트** | `server-only`의 exports 맵이 `react-server → empty.js` / `default → index.js`이고 **`index.js`는 `throw`만 있는 파일**이다. vitest는 `environment: "jsdom"`이라 `react-server` 조건이 걸리지 않아 `src/lib/admin/**`을 import 하는 순간 터진다 | `vitest.config.mts`의 `resolve.alias`로 `server-only`를 빈 모듈에 매핑한다. 이 alias가 없으면 `src/lib/admin/**`은 단위 테스트 자체가 불가능하다 |
 | **로그인 화면에서 시작되는 비로그인 프리페치** | `/admin/login`이 admin 라우트 그룹 안에 있어 **레이아웃의 nav가 로그인 화면에도 렌더된다.** 프로덕션 빌드의 Next는 그 `<Link href="/admin">`을 **비로그인 상태로 프리페치**하고, `proxy.ts`가 쿠키 부재로 내보낸 `/admin/login?next=%2Fadmin`이 라우터 캐시에 남는다. 로그인이 성공(POST 200 + 쿠키 발급)해도 직후의 `router.push("/admin")`이 그 캐시를 써서 **다시 로그인 화면으로 튕긴다.** dev는 프리페치를 하지 않아 드러나지 않는다 | 인증 성공 후에는 `router.refresh()`로 캐시를 **먼저 버린 뒤** 이동한다(`admin-login-form.tsx`). 인증 상태에 따라 결과가 갈리는 흐름은 **프로덕션 빌드로 확인한다** — dev와 dev 기준 E2E는 통과한다 |
 | **E2E 단언 타임아웃 < 콜드 라우트** | dev 서버는 라우트를 첫 요청에 컴파일하고, 프로덕션 서버도 첫 요청에서 모듈 로드 · Supabase 최초 연결을 한다. **클릭 후 이동을 기다리는 단언은 `page.goto`(내비게이션 30초)가 아니라 expect 타임아웃(기본 5초)을 쓰므로** 그 지연에 그대로 걸린다. 실행할 때마다 "그때 처음 열린 라우트"의 테스트가 깨져 증상이 산발적으로 보인다 | `tests/e2e/global-setup.ts`가 상세 라우트까지 미리 두드려 워밍업하고, `expect.timeout`을 15초로 올렸다 (§7) |
+| **ISR 상세 라우트에 `loading.tsx`를 두면 `notFound()`가 소프트 404가 된다** | `loading.tsx`는 Suspense 경계를 만들어 라우트를 **스트리밍**시킨다. 스트리밍은 200으로 시작하므로 그 뒤에 `notFound()`를 던져도 **상태 코드를 바꿀 수 없다**(Next 16 `loading.js` 문서 "Status Codes"). `/cards/[cardId]` · `/news/[slug]`가 여기 해당한다 | **그 두 라우트에 `loading.tsx`를 두지 않는다.** 없으면 `notFound()`가 정상 404를 낸다 — A/B/A로 실측 확인했다(추가 전 404 → 추가 후 200 → 제거 후 다시 404). ⚠️ **`proxy.ts`에서 존재 여부를 미리 조회해 우회하는 방법으로 가지 말 것** — T1.12에서 한 번 그 길로 갔다가 되돌렸다. 상세 조회마다 DB 왕복이 1회 붙어 SSG/ISR의 이득을 상쇄하고, 보안 민감 파일인 `proxy.ts`가 커진다 |
 
 
 ### 2.8 비주얼 언어 (T1.10 확정)
@@ -238,7 +239,7 @@ deckbinder/
 │   │   ├── env.ts                  # 환경변수 런타임 검증
 │   │   └── utils/
 │   ├── types/                      # TypeScript 인터페이스 정의
-│   └── proxy.ts                    # Next 16 미들웨어. /admin 경로 보호
+│   └── proxy.ts                    # Next 16 미들웨어. /admin 경로 보호 + 카드·뉴스 상세 존재 확인(§2.7, T1.12)
 ├── supabase/
 │   ├── migrations/
 │   ├── seed/
@@ -876,41 +877,64 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
   - 검증: `test` 66건 ✅ / `test:e2e` **42건** ✅(커서 3건 신규) / `build`에서 `/cards/[cardId]`·`/news/[slug]` `●` 유지
   - **42건은 T1.12 착수 전 `CI=1`(프로덕션 빌드)로 처음 전수 검증했다** — 그전 수치는 serial describe의 미실행분(§7)이 섞여 실측된 적이 없었다. 그 과정에서 관리자 로그인 프리페치(제품 버그)와 콜드 라우트 타임아웃(하네스) 두 건을 고쳤다 (§2.7)
 
-- [ ] **T1.12** 관리자 운영 최소 완결 + 404/로딩 (§4.5, §5.1) — 아래 백로그 **A-1~3 · B-1~2 · D**를 묶었다
+- [x] **T1.12** 관리자 운영 최소 완결 + 404/로딩 (§4.5, §5.1) — 아래 백로그 **A-1~3 · B-1~2 · D**를 묶었다
   - 브랜치 `feat/t1-12-admin-ops` (T1.11을 `main`에 `--no-ff` 머지한 뒤 신설). **마이그레이션 0건 → `db:types` 재생성 없음**
   - **착수 근거:** 관리자 화면에서 개별 카드에 도달하는 경로가 **0개**다. `src/app/admin/page.tsx`의 대시보드 표에는 행 링크가 없고 `/admin/cards` 라우트 자체가 없다. 게다가 `cards.name_ja`는 §4.4 기준 **일본 매물 검색의 유일한 키**이고 `code`는 §4.6의 `base_code`를 좌우하는데, 오타를 고칠 화면이 없다. 지금 병목은 코드가 아니라 **비어 있는 카탈로그**이므로(§9.1) 입력 도구를 고치는 것이 이후 전 작업의 처리량을 올린다
-  - [ ] **T1.12-1** `/admin/cards` 등록 카드 목록 — 검색 · 페이지네이션 · M
+
+  **UI 설계 (Designer, `feat/t1-12-admin-ops` 위에서 완료) — 프레젠테이션 계층만.** 데이터 조회(`fetchAdminCards`·`fetchAdminCard`) · API 라우트 · `useAdminForm` 배선 · `src/app/admin/**` 페이지 파일은 developer 몫으로 남겨 두었다. 아래는 실제로 만든 파일과, developer가 페이지에서 조립하는 순서다.
+
+  - 신설 `src/components/features/admin/admin-delete-button.tsx` — `news-delete-button.tsx`를 일반화. props `endpoint`(DELETE 대상) · `redirectTo`(삭제 후 이동) · `label`(확인 버튼 문구에 넣을 이름). 확인 → 삭제 2단계와 `data-testid="form-error"`는 그대로 두었다. **항상 `data-testid="admin-delete-zone"`인 `<section>` 안에서 렌더한다** — 아래 "주의"의 셀렉터 충돌을 여기서 막는다. 버튼엔 `type="button"`을 명시해 `<form>`에 잘못 얹혀도 제출을 트리거하지 않게 했다(그래도 원칙은 `<form>` 바깥에 형제로 배치하는 것)
+  - `src/components/features/admin/news-delete-button.tsx` — **내용을 비웠다(`export {}`).** 이 에이전트에게 파일 삭제 도구가 없어서다. developer가 `git rm`으로 정리할 것. 유일한 호출처였던 `src/app/admin/news/[postId]/page.tsx`는 이미 `AdminDeleteButton`으로 옮겨 놓았다(아래 참고) — 남은 import는 없다
+  - `src/app/admin/news/[postId]/page.tsx` 수정 — `AdminDeleteButton`으로 교체하면서 배치도 바꿨다: 기존엔 제목 옆 모서리에 작은 버튼이었지만, 이제 **폼 아래 별도 영역**(danger zone)으로 내렸다. `<form>` 밖 형제로 렌더되므로 안전하다. 카드 수정 페이지도 이 배치를 따른다
+  - `src/components/features/admin/card-form.tsx` — 등록·수정 겸용으로 확장. 추가된 props: `cardId?`(있으면 수정) · `initial?: Partial<CardFormValues>`(새로 export한 타입) · `initialKeywordIds?: string[]`. `isEdit = cardId !== undefined`로 제출 버튼 문구를 "카드 등록" ↔ "저장"으로 바꾸고, `selectedKeywords`의 초기값을 `initialKeywordIds ?? []`로 채웠다. **`useAdminForm`의 `endpoint`·`method`·`resetOnSuccess` 분기는 일부러 손대지 않았다** — 파일 안에 `TODO(developer, T1.12-2/T1.12-3)` 주석으로 표시해 두었으니 `news-form.tsx`의 `isEdit` 분기(엔드포인트 삼항 · `method: "PATCH"` · `resetOnSuccess: !isEdit`)를 그대로 옮기면 된다. `successText`만 `isEdit` 여부로 미리 나눠 놓았다. **삭제 영역(`AdminDeleteButton`)은 `CardForm`이 렌더하지 않는다** — 페이지가 `<form>` 밖에 형제로 놓는다
+  - 신설 `src/components/common/pagination.tsx` — `Pagination` 컴포넌트. props `page`·`totalPages`·`buildHref(page): string`. URL 조립을 모른 채 링크만 그린다(검색어 등 다른 파라미터 보존은 호출부 책임). `AdminTable`을 만들지 않은 것과 같은 이유로 표는 감싸지 않는다 — 목록 하단에 독립적으로 둔다. `totalPages <= 1`이면 아무것도 렌더하지 않는다
+  - 신설 `src/app/not-found.tsx` — `EmptyState` + `SearchX`(lucide-react) 아이콘. 액션 버튼 2개: "도감으로"(`/cards`, 기본) · "홈으로"(`/`, outline). 루트 레이아웃 밖(라우트 그룹 레이아웃 없음)이라 자체 `mx-auto max-w-3xl px-4 py-16` 컨테이너를 둔다
+  - ~~신설 `src/app/(app)/cards/[cardId]/loading.tsx` · `src/app/(content)/news/[slug]/loading.tsx`~~ — **만들었다가 제거했다.** 이 둘이 만드는 Suspense 경계가 라우트를 스트리밍시켜 `notFound()`의 404를 200으로 바꿔 버린다(§2.7). 상세 페이지의 404는 색인·애드센스(§9.1)에 직결되므로 스켈레톤보다 우선한다
+  - **남겨 둔 것(designer 범위 밖):** `src/app/error.tsx`의 `GlobalError` → `RouteError` 이름 정리(1줄) — `loading.tsx`/`not-found.tsx`가 아니라서 손대지 않았다. `AdminCardRow`(`src/types/admin.ts`)는 그대로 두었다 — 목록 표에 썸네일을 넣지 않기로 했으므로(아래 T1.12-1 설계 참고) 필드 추가가 필요 없다
+
+  - [x] **T1.12-1** `/admin/cards` 등록 카드 목록 — 검색 · 페이지네이션 · M
     - 신설 `src/app/admin/cards/page.tsx` (RSC · `dynamic = "force-dynamic"`) / `src/lib/admin/queries.ts`에 `fetchAdminCards({ q, page })` 추가
     - `src/app/admin/layout.tsx` nav에 "카드 목록"을 "카드 등록" 왼쪽에 추가 · `src/app/admin/page.tsx` 표의 각 행을 `/admin/cards/[cardId]`로 링크
     - **`search_cards` RPC를 쓰지 않는다** — ⓐ `code`가 검색 대상에서 빠져 있고 ⓑ `security invoker`라 anon RLS 기준이며 ⓒ total을 주지 않는다. admin 클라이언트로 `code`·`name_ja`·`name_ko`를 `.or(...ilike...)` + `count: "exact"`로 직접 조회한다 (⚠ 입력 새니타이즈는 §2.7 "PostgREST `.or()` 문자열 필터")
     - 재사용: 표 마크업은 `src/app/admin/news/page.tsx`를 따라간다. **공용 `AdminTable`을 만들지 않는다**(사용처 2곳, 추상화가 이르다) · `EmptyState` · `fetchCounts`의 `count: "exact"` 패턴
+    - **UI 설계 (Designer):** 표는 `AdminCardRow`(기존 타입, 필드 변경 없음) 그대로 쓴다 — 썸네일 열은 넣지 않았다. 목록의 완료 기준은 "코드로 훑을 수 있어야 한다"(§2.8 관리자 화면 방향)이지 이미지 스캔이 아니고, `CardImage`가 요구하는 `image_url`을 `AdminCardRow`에 추가하면 이미 그 타입을 반환하는 `fetchRecentCards`(대시보드)의 select 문도 함께 고쳐야 해 developer 영역(`queries.ts`)을 건드리게 된다. 열 구성은 뉴스 표와 동일한 톤: `코드`(font-mono) · `일본어명` · `한국어명` · `레어도` · `종류` · 우측 정렬 `수정` 링크(`/admin/cards/${id}`). 검색창은 `CONTROL_CLASS_SM`(`src/lib/utils/form.ts`) 입력 1개 + `method="GET"` 폼(자바스크립트 없이 `?q=`로 이동, RSC와 자연스럽게 맞물린다) — 별도 컴포넌트로 뽑지 않았다(사용처 1곳, `AdminTable`을 안 만든 것과 같은 판단). 총 건수는 "총 {count}건" 한 줄로 표 위에. 페이지네이션은 신설 `Pagination`(`src/components/common/pagination.tsx`) — `buildHref={(p) => \`/admin/cards?q=${encodeURIComponent(q)}&page=${p}\`}` 형태로 검색어를 유지한 채 페이지만 바꾼다
     - 라우팅 확인 완료: `cards/new/`와 `cards/[cardId]/`는 충돌하지 않는다 — 정적 세그먼트가 먼저 매칭되고 카드 id는 uuid다
     - **완료 기준:** 카드가 100장을 넘어도 코드·일본어명·한국어명으로 찾히고, 총 건수가 보이고, 2페이지로 넘어간다. E2E 1건(검색 + 페이지 이동)
-  - [ ] **T1.12-2** `/admin/cards/[cardId]` 수정 · 삭제 화면 · M
+    - **구현 완료** — 설계 그대로. `sanitizeSearchTerm`(쉼표·괄호 제거)을 `queries.ts`에 export해 단위 테스트 6건으로 고정(`src/lib/admin/queries.test.ts`). E2E는 22장을 폼이 아니라 `page.request.post("/api/admin/cards")`로 직접 등록해 속도를 확보했다(`tests/e2e/admin-cards.spec.ts`)
+  - [x] **T1.12-2** `/admin/cards/[cardId]` 수정 · 삭제 화면 · M
     - 신설 `src/app/admin/cards/[cardId]/page.tsx` / `src/lib/admin/queries.ts`에 `fetchAdminCard(cardId)` 추가(`card_keywords(keyword_id)` 임베드 — §3.3 모듈 규칙 6)
-    - `src/components/features/admin/card-form.tsx`에 `cardId?` · `initial?` · `initialKeywordIds?`를 추가해 **등록·수정 겸용**으로 만든다. `CardEditForm`을 새로 만들지 않는다 — `use-admin-form.ts`가 이미 `method`·`resetOnSuccess`를 지원하고 `news-form.tsx`의 `postId?` 분기가 그대로 옮겨진다. `resetOnSuccess: !isEdit`(수정 폼을 비우면 방금 고친 내용이 사라진다), 키워드 초기값은 `initialKeywordIds ?? []`
-    - `news-delete-button.tsx` → `admin-delete-button.tsx`로 일반화(`endpoint` · `redirectTo` · `label`). 두 번째 사용처가 생긴 지금이 정확한 시점이다(T1.11의 `CardImage` 통합과 같은 판단). 확인 → 삭제 2단계 동작은 그대로 둔다. 기존 호출처는 `src/app/admin/news/[postId]/page.tsx` 1곳
+    - `CardForm`은 이미 `cardId?` · `initial?` · `initialKeywordIds?`를 받는다(위 "UI 설계" 참고). 남은 일은 ⓐ `useAdminForm` 옵션의 `TODO` 분기 채우기(`endpoint`/`method`/`resetOnSuccess`) ⓑ `fetchAdminCard` 결과를 `initial`에 꽂을 때 null 필드를 `""`로 coalesce(뉴스 수정 페이지의 `summary: post.summary ?? ""` 패턴과 동일)
+    - **페이지 조립 순서(위→아래):** 제목("카드 수정") + `code`(font-mono, 뉴스 수정 페이지의 slug 표기와 동일 위계) → `CardForm` → `AdminDeleteButton`(`endpoint={`/api/admin/cards/${cardId}`}`, `redirectTo="/admin/cards"`, `label={card.code}`). 뉴스 수정 페이지를 이미 이 순서로 고쳐 놓았으니 그대로 따라가면 된다
+    - `AdminDeleteButton`(`endpoint` · `redirectTo` · `label`)은 이미 만들어져 있다(위 "UI 설계" 참고) — 새로 만들지 않는다
     - **완료 기준:** 목록 → 카드 클릭 → `name_ja` 수정 → 저장 → 도감에 반영. 삭제 → 목록에서 사라지고 `/cards/{id}`가 404. E2E 1건(등록 → 수정 → 삭제 왕복)이며 **이 스펙은 마지막에 자기 데이터를 지운다**(§9.9를 이 경로에서 해소)
-  - [ ] **T1.12-3** 키워드 재태깅 — `PATCH`의 400 제거 · S~M
+    - **구현 완료** — 설계 그대로. `fetchAdminCard`는 `card_keywords(keyword_id)`를 임베드해 `keywordIds: string[]`로 평탄화한다. `null` 필드는 뉴스 수정 페이지 패턴대로 `""`로 coalesce
+  - [x] **T1.12-3** 키워드 재태깅 — `PATCH`의 400 제거 · S~M
     - `src/app/api/admin/cards/[cardId]/route.ts` — 앱 레벨 보상 트랜잭션(이전 목록 확보 → delete → insert → 실패 시 재삽입). 계약은 §5.1 참조
-    - **T1.12-2와 묶이는 이유는 순서가 아니라 의존이다.** `CardForm`을 재사용하는 순간 수정 화면에 키워드 칩이 뜨고, 저장하면 400이 난다. 미루면 반쯤 깨진 화면이 남는다
+    - **T1.12-2와 묶이는 이유는 순서가 아니라 의존이다.** `CardForm`은 이미 수정 모드에서도 키워드 칩을 그리고 `extra: () => ({ keyword_ids: selectedKeywords })`를 보낸다. 이 라우트가 먼저 고쳐지지 않으면 키워드가 1개라도 걸린 카드는 저장할 때마다 400이 난다
     - 권한 확인 완료 — 마이그레이션 001에서 `service_role`이 `card_keywords`에 `delete`를 이미 갖고 있다. **권한 마이그레이션 불필요**
     - **완료 기준:** 키워드를 빼고 더한 뒤 저장 → 카드 상세의 칩과 `/cards?keywords=` 필터에 즉시 반영. T1.12-2의 E2E 왕복에 키워드 토글 1개 추가
-  - [ ] **T1.12-4** `not-found.tsx` + 상세 `loading.tsx` · S
-    - 신설 `src/app/not-found.tsx` · `src/app/(app)/cards/[cardId]/loading.tsx` · `src/app/(content)/news/[slug]/loading.tsx`
-    - `src/app/error.tsx`의 export 함수명 `GlobalError` → `RouteError` (1줄). 이 이름 때문에 `global-error.tsx`가 이미 있는 것으로 오인된다 — 현재 `src/app` 전체에 상태 파일은 `error.tsx` 하나뿐이다
+    - **구현 완료** — 설계 그대로 보상 트랜잭션 적용
+  - [x] **T1.12-4** `not-found.tsx` · S — **상세 `loading.tsx`는 만들었다가 제거했다(아래 참고)**
+    - `src/app/not-found.tsx` 신설 완료(위 "UI 설계" 참고)
+    - `src/app/error.tsx`의 export 함수명 `GlobalError` → `RouteError`로 정리 완료(1줄)
     - **루트 하나면 충분하다** — `src/app/layout.tsx`가 `Header`/`Footer`를 렌더하고 루트 `not-found.tsx`는 그 안에서 렌더되므로, 카드·뉴스 상세의 `notFound()`와 미매칭 URL을 한 파일이 모두 덮는다
-    - 재사용: `EmptyState` · `Skeleton` + `.aspect-card`. **새 스켈레톤 컴포넌트 파일을 만들지 않는다**(상세 로딩은 12줄이면 끝나고 `CardGridSkeleton`은 그리드용이라 맞지 않는다)
-    - **완료 기준:** `/cards/00000000-0000-0000-0000-000000000000` 방문 시 헤더·푸터가 있는 404 + "도감으로" 링크. E2E 1건(`page.goto()` 응답 status 404 + 헤더 표시)
-  - [ ] **T1.12-5** (스트레치) 관리자 인증 단위 테스트 · S
+    - 재사용: `EmptyState` · `Skeleton` + `.aspect-card`. **새 스켈레톤 컴포넌트 파일을 만들지 않았다**(상세 로딩은 12줄 안팎이라 `CardGridSkeleton`은 그리드용이라 맞지 않는다)
+    - **완료 기준(developer가 E2E로 확정):** `/cards/00000000-0000-0000-0000-000000000000` 방문 시 헤더·푸터가 있는 404 + "도감으로" 링크. E2E 1건(`page.goto()` 응답 status 404 + 헤더 표시)
+    - **⚠️ 상세 `loading.tsx`를 만들었다가 제거했다 — §2.7에 새 행으로 기록.** 추가하고 나니 `/cards/[cardId]` · `/news/[slug]`의 `notFound()`가 404 대신 **200**을 반환했다. `loading.tsx`가 만드는 Suspense 경계가 라우트를 스트리밍시키고, 스트리밍은 200으로 시작하므로 그 뒤에는 상태 코드를 바꿀 수 없다(Next 16 `loading.js` 문서 "Status Codes").
+      - **원인 규명은 A/B/A 실측으로 했다** — `loading.tsx` 추가 **전** CI=1 전수 통과(`news.spec.ts`의 "초안은 주소를 알아도 404다" · "없는 slug는 404다"가 `status() === 404`를 단언하며 통과) → 추가 후 200 → 제거 후 다시 404. 즉 **T1.12 이전부터 있던 버그가 아니라 이번에 들어온 회귀였다**
+      - 중간에 `proxy.ts`에서 존재 여부를 미리 조회해 `rewrite`하는 우회(`src/lib/cards/exists.ts` · `src/lib/news/exists.ts`, 매처를 `/cards/:cardId` · `/news/:slug`로 확장)를 구현했으나 **되돌렸다.** 동작은 했지만 원인 진단이 틀린 상태에서 나온 대응이라, 상세 조회마다 DB 왕복이 1회 붙고 보안 민감 파일인 `proxy.ts`가 커지는 대가를 치를 이유가 없었다
+      - **결론:** 이 두 라우트에는 `loading.tsx`를 두지 않는다. 스켈레톤의 이득은 클라이언트 내비게이션 구간뿐인데(B-2), 404는 색인·애드센스(§9.1)에 직결된다
+      - `src/lib/cards/revalidate.ts`는 **남긴다** — 수정·삭제 후 ISR 캐시를 무효화하지 않으면 삭제된 카드가 캐시 만료까지 200을 계속 돌려준다. `revalidateNews`와 같은 패턴이며, 404가 실제로 나오려면 이쪽이 필요하다
+  - [x] **T1.12-5** (스트레치) 관리자 인증 단위 테스트 · S — **완료**
     - `src/lib/admin/session.test.ts` · `src/lib/admin/responses.test.ts` · `vitest.config.mts`
-    - **선행 장애물:** `vitest.config.mts`에 `server-only` alias가 없으면 import 즉시 터진다 (§2.7). **T1.12-5를 못 끝내더라도 alias는 남긴다** — 다음 사람이 안 밟는다
-    - 케이스: `ADMIN_TOKEN` 미설정/15자 → throw · 길이가 다른 입력에 예외 없이 `false`(`safeEqual`의 길이 가드 회귀 방지 — 지우면 401이 500이 된다) · 해시 쿠키 통과/1글자 차이 거부 · `23505`·`23503`·`23502` 매핑과 **DB 원문이 응답 본문에 새지 않는지**
-    - `adminToken()`은 `process.env`를 모듈 로드 시가 아니라 **호출 시** 읽으므로 `vi.stubEnv`로 케이스마다 갈아끼울 수 있다(모듈 리셋 불필요)
+    - **선행 장애물:** `vitest.config.mts`에 `server-only` alias가 없으면 import 즉시 터진다 (§2.7). alias를 `vitest.server-only-mock.ts`로 추가했다 — `resolve.alias`가 이제 존재한다
+    - 케이스: `ADMIN_TOKEN` 미설정/15자 → throw · 16자 경계값 통과 · 길이가 다른 입력에 예외 없이 `false`(`safeEqual`의 길이 가드 회귀 방지) · 해시 쿠키 통과/1글자 차이 거부/쿠키 부재 거부 · `23505`·`23503`·`23502` 매핑과 **DB 원문이 응답 본문에 새지 않는지**(스파이로 확인)
+    - `adminToken()`은 `process.env`를 모듈 로드 시가 아니라 **호출 시** 읽으므로 `vi.stubEnv`로 케이스마다 갈아끼웠다(모듈 리셋 불필요). `SUPABASE_SERVICE_ROLE_KEY` 더미 값도 `vitest.config.mts`의 `env`에 추가했다 — `src/lib/admin/**`이 `src/lib/supabase/admin.ts`를 거쳐 `env.server.ts`를 로드하기 때문
     - **왜 지금:** `session.ts`는 인터넷과 `service_role` 쓰기 사이의 유일한 방벽인데 지금은 E2E 401 1건으로만 간접 검증된다. T1.12-1~3이 그 쓰기 표면을 **넓힌다**(목록·수정·삭제·재태깅)
-  - [ ] **T1.12-6** 문서 갱신 — 본 문서 §3.2 · §4.5 · §5.1 · §8 · §9 (이 커밋에 포함)
-  - **주의**: `data-testid="form-error"`를 `field.tsx`(StatusMessage) · `admin-delete-button.tsx` · `admin-login-form.tsx` 세 곳이 공유하고 E2E 3곳이 **전역으로** 잡는다. 카드 수정 화면은 **폼과 삭제 버튼이 한 페이지에 공존**하므로 둘이 동시에 에러를 내면 Playwright strict mode가 "resolved to 2 elements"로 실패한다. 새 스펙은 `form` 또는 삭제 영역으로 범위를 좁혀 잡는다 — 위 T1.10 주의사항의 `listitem` 사고와 **같은 유형**(전역 셀렉터가 두 번째 사용처를 만나는 순간 깨진다)이다
-  - 검증 목표: `test` 66건 + T1.12-5 신규 / `test:e2e` **`CI=1`(프로덕션 빌드) 기준** 42건 + 신규 3건 (§7) / `build`에서 `/cards/[cardId]`·`/news/[slug]` `●` 유지(`/admin/**`은 `force-dynamic`이라 `ƒ`가 정상) / 마무리에 `npm run db:clean`
+    - 신규 17건(session 10건 · responses 7건) — 아래 검증 결과 참고
+  - [x] **T1.12-6** 문서 갱신 — 본 문서 §3.2 · §4.5 · §5.1 · §8 · §9. **§8의 T1.12 블록(UI 설계 부분)은 designer 커밋에서 반영했다.** §4.5 · §5.1은 이미 최종 계약과 일치해 추가 수정이 필요 없었다(확인 완료). §2.7에 새 행(ISR `notFound()` 소프트 404) · §9.9(E2E 데이터 정리)를 이 커밋에서 갱신했다
+  - **주의**: `data-testid="form-error"`를 `field.tsx`(StatusMessage) · `admin-delete-button.tsx` · `admin-login-form.tsx` 세 곳이 공유하고 E2E 3곳이 **전역으로** 잡는다. 카드 수정 화면은 **폼과 삭제 버튼이 한 페이지에 공존**하므로 둘이 동시에 에러를 내면 Playwright strict mode가 "resolved to 2 elements"로 실패한다. **UI 설계에서 미리 대응했다** — `AdminDeleteButton`은 항상 `data-testid="admin-delete-zone"`인 `<section>` 안에서만 `form-error`를 렌더하므로, 새 E2E는 `page.locator("form").getByTestId("form-error")`(폼 쪽)와 `page.getByTestId("admin-delete-zone").getByTestId("form-error")`(삭제 쪽)로 범위를 좁혀 잡으면 된다 — 위 T1.10 주의사항의 `listitem` 사고와 **같은 유형**(전역 셀렉터가 두 번째 사용처를 만나는 순간 깨진다)이다
+  - 검증 결과: `test` **89건** ✅(66 + 새니타이즈 6 + session 10 + responses 7) / `test:e2e` **`CI=1`(프로덕션 빌드) 기준** **45건** ✅(42 + 신규 3 — 목록 검색·페이지네이션 / 등록→수정→삭제 왕복 / 404) / `build`에서 `/cards/[cardId]`·`/news/[slug]` `●` 유지, `/admin/**`은 `ƒ` / `lint`·`typecheck` 통과 / `npm run db:clean` 완료(카드·세트·키워드·뉴스 모두 0행)
 
 **T1.11 리팩토링에서 확인한 백로그**
 
@@ -920,17 +944,19 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
 
 **A. 관리자 운영** (T1.6-A 미포함분)
 
-- [ ] **A-1** 등록 카드 목록 — 검색 · 페이지네이션. 대시보드가 최근 20건만 보이고 그 표에조차 링크가 없어 **등록한 카드를 다시 찾을 방법이 없다** → **T1.12-1**
-- [ ] **A-2** 카드 수정 · 삭제 UI — `PATCH`/`DELETE /api/admin/cards/[cardId]`는 이미 있고 화면만 없다 → **T1.12-2**
-- [ ] **A-3** 키워드 재태깅 — `PATCH`가 `keyword_ids`를 400으로 명시 거부한다. 지금은 태그를 고치려면 카드를 지우고 다시 만들어야 한다 → **T1.12-3**
+- [x] **A-1** 등록 카드 목록 — 검색 · 페이지네이션. 대시보드가 최근 20건만 보이고 그 표에조차 링크가 없어 **등록한 카드를 다시 찾을 방법이 없다** → **T1.12-1**
+- [x] **A-2** 카드 수정 · 삭제 UI — `PATCH`/`DELETE /api/admin/cards/[cardId]`는 이미 있고 화면만 없다 → **T1.12-2**
+- [x] **A-3** 키워드 재태깅 — `PATCH`가 `keyword_ids`를 400으로 명시 거부한다. 지금은 태그를 고치려면 카드를 지우고 다시 만들어야 한다 → **T1.12-3**
 - [ ] **A-4** 세트 수정 · 삭제, 키워드 수정 · 삭제 (등록만 가능) — **T1.12 범위 밖.** 개수가 적고 "다시 못 찾는" 문제가 아니다. T1.12-2에서 `AdminDeleteButton`을 일반화해두면 각각 S로 줄어든다
 - [ ] **A-5** CSV 일괄 등록 — 수백 장을 폼 하나씩은 비현실적. **T1.12 범위 밖(L).** 중복 처리 · 부분 실패 · 드라이런 · 게임/세트 매핑 설계가 먼저다. 잘못 만들면 카탈로그를 덮어쓴다 — §4.4가 시드 스크립트를 삭제한 것과 같은 위험이라 **별도 설계 태스크로 분리**한다
 
 **B. 사용자 화면 — 없어서 티가 나는 것**
 
-- [ ] **B-1** `not-found.tsx` — 지금은 `notFound()`가 헤더·푸터 없는 Next 기본 404를 낸다. 카드·뉴스 상세에서 실제로 발생하고, T1.10의 "상업 서비스로 보이게" 와 정면으로 어긋난다 → **T1.12-4**
-- [ ] **B-2** `loading.tsx` — 확실한 이득은 **도감 그리드 → 카드 상세로 넘어가는 클라이언트 내비게이션** 구간이고, 실사용 경로도 그쪽이다 → **T1.12-4**
-  - ~~"첫 요청에 생성되는 on-demand ISR이라 그 동안 빈 화면"~~ → **사유를 교정한다.** 콜드 **문서** 요청은 blocking fallback이라 `loading.tsx`가 그 구간을 덮지 못할 가능성이 크다. **추정이며 실측으로 확정해야 한다** — 이 사유만 믿고 범위를 넓히지 말 것
+- [x] **B-1** `not-found.tsx` — 지금은 `notFound()`가 헤더·푸터 없는 Next 기본 404를 낸다. 카드·뉴스 상세에서 실제로 발생하고, T1.10의 "상업 서비스로 보이게" 와 정면으로 어긋난다 → **T1.12-4**
+- [x] **B-2** `loading.tsx` — **T1.12-4에서 시도했다가 철회했다. 이 항목은 닫는다.**
+  - ~~"첫 요청에 생성되는 on-demand ISR이라 그 동안 빈 화면"~~ → 사유 교정 후에도 남은 이득은 **도감 그리드 → 카드 상세 클라이언트 내비게이션** 구간뿐이었다
+  - 실측 결과 **그 이득보다 대가가 크다**: 상세 라우트에 `loading.tsx`를 두면 `notFound()`가 200이 되어 소프트 404가 된다(§2.7). 색인·애드센스(§9.1)에 직결되므로 스켈레톤을 포기했다
+  - 상세 로딩 체감을 다시 다루려면 **`loading.tsx`가 아닌 방법**을 찾아야 한다 — 이 경로는 막혀 있다
 - [ ] **B-3** `global-error.tsx` — 루트 `error.tsx`만 있다. **T1.12 범위 밖.** 루트 레이아웃 자체가 터진 경우만 잡아 빈도가 낮고 `<html>`/`<body>`를 직접 렌더해야 해 검증이 번거롭다. 함수명 오인(`GlobalError`)만 T1.12-4에서 1줄 정리한다
 - [ ] **B-4** 도감 결과 건수 표시 — `search_cards`가 total을 주지 않는다. count를 따로 받을지 커서 방식을 유지할지 판단 필요. **T1.12 범위 밖**
 - [ ] **B-5** 도감 정렬 옵션 (지금은 코드순 고정). **T1.12 범위 밖** — 정렬 키를 바꾸면 커서 튜플도 바꿔야 하는데(§2.7 "커서 키 ≠ 유니크 키") 007에서 **방금 고친 곳**이다. 하루에 끼워 넣을 일이 아니다
@@ -942,8 +968,8 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
 
 **D. 테스트 공백** → **T1.12-5**(스트레치). 선행으로 `vitest.config.mts`의 `server-only` alias가 필요하다 (§2.7)
 
-- [ ] **D-1** `src/lib/admin/session.ts` 무테스트 — `timingSafeEqual` 비교와 해시 쿠키 생성은 **인증의 핵심**인데 E2E의 401 확인으로만 간접 검증된다
-- [ ] **D-2** `src/lib/admin/responses.ts` 무테스트 — PG 오류코드 매핑(23505/23503/23502)
+- [x] **D-1** `src/lib/admin/session.ts` 무테스트 — `timingSafeEqual` 비교와 해시 쿠키 생성은 **인증의 핵심**인데 E2E의 401 확인으로만 간접 검증된다 → **T1.12-5**에서 해소
+- [x] **D-2** `src/lib/admin/responses.ts` 무테스트 — PG 오류코드 매핑(23505/23503/23502) → **T1.12-5**에서 해소
 
 **E. 운영**
 
@@ -988,5 +1014,5 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
 6. **환율 갱신 주기** — 기준가 KRW 환산 스냅샷 주기(일 1회 권장).
 7. **Node 버전** — 현재 20.15.1로 테스트 툴체인 4개를 하향 고정한 상태다(§2.5). 22 LTS로 올리면 해소된다.
 8. **원격 DB의 임시 데이터** — T1.10 디자인 확인용 샘플(세트 2 · 카드 8 · 키워드 3 · 기사 3)과 E2E가 매 실행마다 남기는 카드·세트·기사가 쌓여 있다. 샘플은 **카드명과 일러스트가 서로 맞지 않는 가짜 데이터**라 공개 전에 반드시 지워야 한다. `npm run db:clean` — 접두사 + 6자리 타임스탬프 정규식으로만 골라내므로 손으로 등록한 카드는 건드리지 않는다. **T1.12 착수 전 정리 후 실측: `cards` · `card_sets` · `keywords` · `news_posts` 모두 0행이다.** 손으로 등록한 데이터는 애초에 없었으므로 유실은 없고, T1.12의 착수 근거인 "지금 병목은 비어 있는 카탈로그"가 수치로 확인됐다.
-9. **E2E가 데이터를 남긴다** — 각 spec이 `beforeAll`에서 만든 카드·세트·키워드를 지우지 않아 실행할수록 원격 DB에 누적된다. **T1.12 착수 전 관측: 누적량은 두 차례 정리에서 각각 24행 · 7행 수준으로 작았고, 성능 저하는 아직 나타나지 않았다.** 즉 지금 문제는 성능이 아니라 **`db:clean`을 매번 잊지 않고 돌려야 하는 상태 그 자체**다. `afterAll`에서 스스로 지우게 하거나 테스트 전용 프로젝트를 분리하는 편이 낫다. T1.12-2의 등록 → 수정 → **삭제** 왕복 스펙은 자기 데이터를 지우므로 이 경로에서는 해소된다 — 나머지 스펙에 적용할 선례로 삼는다.
+9. **E2E가 데이터를 남긴다** — 각 spec이 `beforeAll`에서 만든 카드·세트·키워드를 지우지 않아 실행할수록 원격 DB에 누적된다. **T1.12 착수 전 관측: 누적량은 두 차례 정리에서 각각 24행 · 7행 수준으로 작았고, 성능 저하는 아직 나타나지 않았다.** 즉 지금 문제는 성능이 아니라 **`db:clean`을 매번 잊지 않고 돌려야 하는 상태 그 자체**다. `afterAll`에서 스스로 지우게 하거나 테스트 전용 프로젝트를 분리하는 편이 낫다. **T1.12-2에서 이 선례를 실제로 적용했다** — `admin-cards.spec.ts`의 등록 → 수정 → **삭제** 왕복 테스트는 끝에 자기 카드를 지운다. 같은 파일의 페이지네이션 테스트(22장 등록)는 의도적으로 지우지 않는다 — 검색 결과가 22건임을 검증해야 하는데 그때마다 지우면 다음 실행에서 대조군이 사라진다. 대신 `scripts/cleanup-sample.ts`에 `PGE######-` · `rt######kw` 패턴을 등록해 `db:clean`이 걷어가게 했다. **T1.12 마무리 시점 실측: `db:clean` 후 `cards` · `card_sets` · `keywords` · `news_posts` 모두 0행.**
 10. **카드 삭제는 하드 삭제로 유지한다 (T1.12 결정)** — 참조하는 테이블이 아직 `card_keywords`뿐이고 여기에는 `on delete cascade`가 걸려 있어, soft-delete를 지금 도입하면 전 조회 경로에 `deleted_at is null` 조건을 다는 비용만 남는다. **전환 시점은 `deck_cards`(T2.3)와 `collection_items`(T3.2)가 들어올 때다.** 그때부터는 카드 1장을 지우는 것이 남의 덱과 컬렉션을 조용히 무너뜨리므로 하드 삭제를 유지할 수 없다. 두 마이그레이션 중 먼저 오는 쪽에서 재검토한다.

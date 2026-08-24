@@ -51,7 +51,14 @@ export default async function AdminDashboardPage() {
               <tbody>
                 {recent.map((c) => (
                   <tr key={c.id} className="border-t">
-                    <td className="px-3 py-2 font-mono text-xs">{c.code}</td>
+                    <td className="px-3 py-2">
+                      <Link
+                        href={`/admin/cards/${c.id}`}
+                        className="font-mono text-xs underline-offset-4 hover:underline"
+                      >
+                        {c.code}
+                      </Link>
+                    </td>
                     <td className="px-3 py-2">{c.name_ja}</td>
                     <td className="px-3 py-2 text-muted-foreground">{c.name_ko ?? "—"}</td>
                     <td className="px-3 py-2 text-muted-foreground">{c.rarity ?? "—"}</td>

@@ -29,6 +29,9 @@ const EMPTY = {
   effect_text: "",
 };
 
+/** news-form.tsx의 NewsFormValues와 같은 역할 — 수정 폼 initial prop 타이핑에 쓴다. */
+export type CardFormValues = typeof EMPTY;
+
 /** 자유 입력이지만 오타가 잦은 항목은 예시를 붙여 둔다. */
 const TEXT_FIELDS = [
   { key: "code", label: "카드 코드", hint: "예: OP01-001", required: true },
@@ -55,24 +58,48 @@ const TEXT_FIELDS = [
   required?: boolean;
 }[];
 
+/**
+ * 등록·수정 겸용 (T1.12-2). `cardId`가 있으면 수정, 없으면 등록이다 —
+ * `news-form.tsx`의 `postId?` 분기와 같은 규칙이다.
+ *
+ * 삭제 영역(`AdminDeleteButton`)은 이 컴포넌트가 아니라 **호출부(수정 페이지)가
+ * `<form>` 바깥에 형제로 렌더한다.** `admin-delete-button.tsx`의 문서 참고.
+ */
 export function CardForm({
   games,
   sets,
   keywords,
+  cardId,
+  initial,
+  initialKeywordIds,
 }: {
   games: GameOption[];
   sets: SetOption[];
   keywords: KeywordOption[];
+  /** 있으면 수정, 없으면 등록 */
+  cardId?: string;
+  initial?: Partial<CardFormValues>;
+  /** 수정 대상 카드에 이미 걸린 키워드. 없으면(등록) 빈 배열로 시작한다. */
+  initialKeywordIds?: string[];
 }) {
-  const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]);
+  const isEdit = cardId !== undefined;
+  const [selectedKeywords, setSelectedKeywords] = useState<string[]>(
+    initialKeywordIds ?? [],
+  );
 
   const { values, setValue, patch, status, pending, submit } = useAdminForm({
     empty: EMPTY,
-    initial: { game_id: games[0]?.id ?? "" },
-    endpoint: "/api/admin/cards",
+    initial: { game_id: games[0]?.id ?? "", ...initial },
+    // news-form.tsx의 isEdit 분기(엔드포인트 삼항 · method: PATCH · resetOnSuccess: !isEdit)와
+    // 동일 패턴. PATCH가 keyword_ids를 받아들이는 것은 T1.12-3에서 처리했다.
+    endpoint: isEdit ? `/api/admin/cards/${cardId}` : "/api/admin/cards",
+    method: isEdit ? "PATCH" : "POST",
+    // 수정 폼을 비우면 방금 고친 내용이 사라진다.
+    resetOnSuccess: !isEdit,
     extra: () => ({ keyword_ids: selectedKeywords }),
-    successText: (v) => `카드 ${v.code} 등록 완료`,
-    // 한 세트를 연속 입력하는 흐름이 잦다.
+    successText: (v) => (isEdit ? `카드 ${v.code} 저장 완료` : `카드 ${v.code} 등록 완료`),
+    // 한 세트를 연속 입력하는 흐름이 잦다 (등록 전용 — resetOnSuccess를 developer가
+    // false로 두는 수정 흐름에서는 쓰이지 않는다).
     keepOnSuccess: (v) => ({ game_id: v.game_id, set_id: v.set_id }),
   });
 
@@ -200,7 +227,7 @@ export function CardForm({
       <StatusMessage status={status} />
 
       <Button type="submit" disabled={pending}>
-        {pending ? "저장 중…" : "카드 등록"}
+        {pending ? "저장 중…" : isEdit ? "저장" : "카드 등록"}
       </Button>
     </form>
   );
