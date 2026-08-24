@@ -9,11 +9,16 @@ const isCI = Boolean(process.env.CI);
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  // 라우트를 미리 두드려 첫 테스트가 컴파일·연결 지연을 뒤집어쓰지 않게 한다.
+  globalSetup: "./tests/e2e/global-setup.ts",
   fullyParallel: true,
   forbidOnly: isCI,
   retries: isCI ? 2 : 0,
   workers: isCI ? 1 : undefined,
   reporter: isCI ? "github" : "html",
+  // 기본 5초는 클릭 후 상세 라우트로 이동하는 단언에 모자란다. 상세는 DB 왕복이
+  // 끼고, 워밍업이 덮지 못한 라우트(관리자 상세 등)는 첫 진입에서 컴파일까지 한다.
+  expect: { timeout: 15_000 },
   use: {
     baseURL,
     trace: "on-first-retry",
@@ -26,6 +31,7 @@ export default defineConfig({
       : `npm run dev -- --port ${port}`,
     url: baseURL,
     reuseExistingServer: false,
-    timeout: 120_000,
+    // CI 경로는 build까지 포함하므로 120초로는 빌드 중에 끊길 수 있다.
+    timeout: 300_000,
   },
 });
