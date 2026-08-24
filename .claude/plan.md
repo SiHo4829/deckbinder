@@ -167,6 +167,10 @@ shadcn CLI 4.19에서 `-b/--base` 플래그의 의미가 **base color → primit
 | **커서 키 ≠ 유니크 키** | `cards`의 유니크는 `(game_id, code)`인데 커서를 `code` 하나로 잡았다. 게임 필터 없이 훑을 때 두 게임에 같은 코드가 있으면 **카드 한 장이 조용히 사라진다.** 에러도 빈 결과도 아니라 눈치채기 어렵다 | 커서는 **유니크 제약과 같은 폭**이어야 한다. `(code, id)` 튜플로 정렬·비교한다 (007) |
 | **`generateMetadata` + 페이지 본문의 중복 조회** | 둘이 같은 인자로 같은 조회를 각각 한 번씩 한다. Next 15+ 의 `fetch` 기본은 캐시 안 함이라 **DB 왕복이 2배**가 되는데 화면은 멀쩡하다 | 조회 함수를 React `cache()`로 감싼다. 캐시 범위가 렌더 1회라 최신성은 그대로다 |
 | **eslint flat config는 `.gitignore`를 안 본다** | `supabase start`가 만드는 `supabase/.temp/`를 린트가 스캔해 남의 번들 코드에서 오류 수백 개가 쏟아진다 | `eslint.config.mjs`의 `globalIgnores`에 명시한다 |
+| **PostgREST `.or()` 문자열 필터** | `.or("name_ja.ilike.%q%,name_ko.ilike.%q%")`처럼 조건을 **문자열로 이어 붙이는** API다. `q`에 사용자 입력의 **쉼표·괄호**가 그대로 들어가면 필터 문법이 깨진다. 400이 나면 그나마 낫고, 운이 나쁘면 조건이 조용히 다른 뜻으로 파싱된다 | 조립 전에 `q`에서 `[,()]`를 제거하거나 이스케이프한다 (관리자 카드 검색이 첫 사용처) |
+| **`server-only` + jsdom 단위 테스트** | `server-only`의 exports 맵이 `react-server → empty.js` / `default → index.js`이고 **`index.js`는 `throw`만 있는 파일**이다. vitest는 `environment: "jsdom"`이라 `react-server` 조건이 걸리지 않아 `src/lib/admin/**`을 import 하는 순간 터진다 | `vitest.config.mts`의 `resolve.alias`로 `server-only`를 빈 모듈에 매핑한다. 이 alias가 없으면 `src/lib/admin/**`은 단위 테스트 자체가 불가능하다 |
+| **로그인 화면에서 시작되는 비로그인 프리페치** | `/admin/login`이 admin 라우트 그룹 안에 있어 **레이아웃의 nav가 로그인 화면에도 렌더된다.** 프로덕션 빌드의 Next는 그 `<Link href="/admin">`을 **비로그인 상태로 프리페치**하고, `proxy.ts`가 쿠키 부재로 내보낸 `/admin/login?next=%2Fadmin`이 라우터 캐시에 남는다. 로그인이 성공(POST 200 + 쿠키 발급)해도 직후의 `router.push("/admin")`이 그 캐시를 써서 **다시 로그인 화면으로 튕긴다.** dev는 프리페치를 하지 않아 드러나지 않는다 | 인증 성공 후에는 `router.refresh()`로 캐시를 **먼저 버린 뒤** 이동한다(`admin-login-form.tsx`). 인증 상태에 따라 결과가 갈리는 흐름은 **프로덕션 빌드로 확인한다** — dev와 dev 기준 E2E는 통과한다 |
+| **E2E 단언 타임아웃 < 콜드 라우트** | dev 서버는 라우트를 첫 요청에 컴파일하고, 프로덕션 서버도 첫 요청에서 모듈 로드 · Supabase 최초 연결을 한다. **클릭 후 이동을 기다리는 단언은 `page.goto`(내비게이션 30초)가 아니라 expect 타임아웃(기본 5초)을 쓰므로** 그 지연에 그대로 걸린다. 실행할 때마다 "그때 처음 열린 라우트"의 테스트가 깨져 증상이 산발적으로 보인다 | `tests/e2e/global-setup.ts`가 상세 라우트까지 미리 두드려 워밍업하고, `expect.timeout`을 15초로 올렸다 (§7) |
 
 
 ### 2.8 비주얼 언어 (T1.10 확정)
@@ -240,7 +244,7 @@ deckbinder/
 │   ├── seed/
 │   └── config.toml
 ├── tests/
-│   └── e2e/                        # Playwright 스펙 (단위 테스트는 소스 옆 *.test.ts)
+│   └── e2e/                        # Playwright 스펙 + global-setup.ts (§7). 단위 테스트는 소스 옆 *.test.ts
 ├── workers/
 │   └── crawler/                    # Cloudflare Workers (별도 package.json)
 ├── AGENT.md
@@ -354,18 +358,19 @@ src/components/
 │   │   ├── wishlist-panel.tsx
 │   │   ├── collection-value.tsx          # 총 가치
 │   │   └── share-binder-dialog.tsx
-│   └── news/
-│       ├── news-list.tsx
-│       ├── news-article.tsx
-│       └── markdown.tsx                  # react-markdown 매핑 (raw HTML 미허용)
-├── admin/
-│   ├── field.tsx                         # Field · TextInput · TextArea · NativeSelect · StatusMessage
-│   ├── use-admin-form.ts                 # 등록 폼 공통 제출·에러 처리
-│   ├── admin-login-form.tsx
-│   ├── set-form.tsx
-│   ├── card-form.tsx
-│   ├── keyword-form.tsx
-│   └── news-form.tsx                     # 작성·수정 겸용 (method + resetOnSuccess)
+│   ├── news/
+│   │   ├── news-list.tsx
+│   │   ├── news-article.tsx
+│   │   └── markdown.tsx                  # react-markdown 매핑 (raw HTML 미허용)
+│   └── admin/                            # 관리자도 도메인 묶음이다 — ui/features/common 3분할(CLAUDE.md) 준수
+│       ├── field.tsx                     # Field · TextInput · TextArea · NativeSelect · StatusMessage
+│       ├── use-admin-form.ts             # 등록·수정 폼 공통 제출·에러 처리 (method · resetOnSuccess · extra)
+│       ├── admin-login-form.tsx
+│       ├── admin-delete-button.tsx       # 확인 → 삭제 2단계. endpoint · redirectTo · label (T1.12)
+│       ├── set-form.tsx
+│       ├── card-form.tsx                 # 등록·수정 겸용 (cardId? · initial? · initialKeywordIds?)
+│       ├── keyword-form.tsx
+│       └── news-form.tsx                 # 작성·수정 겸용 (method + resetOnSuccess)
 └── common/
     ├── header.tsx                        # 서버 컴포넌트. 내비 · 테마 토글 조립
     ├── main-nav.tsx                      # 데스크톱 내비 (client — usePathname)
@@ -388,7 +393,7 @@ src/lib/
 │   ├── session.ts                        # ADMIN_TOKEN 검증 · 쿠키 값 (server-only)
 │   ├── guard.ts                          # requireAdmin() — 인증의 실제 판단 지점
 │   ├── responses.ts                      # zod/Postgres 오류 → 응답 매핑
-│   └── queries.ts                        # 관리자 화면 조회
+│   └── queries.ts                        # 관리자 화면 조회 — 목록 · 단건 · 집계 (service_role)
 ├── supabase/
 │   ├── client.ts                         # 브라우저용 (anon key)
 │   ├── server.ts                         # RSC/Route Handler용 (쿠키 세션)
@@ -435,6 +440,7 @@ src/lib/
 3. `src/components/features/*` 간 직접 import 금지. 교차가 필요하면 `src/lib/domain` 또는 상위 라우트에서 조립한다.
 4. `src/lib/supabase/admin.ts`는 `import 'server-only'`를 선언하며, 이 파일 외에서 `service_role` 키를 참조하지 않는다.
 5. `NEXT_PUBLIC_` 접두사는 공개해도 무방한 값에만 붙인다.
+6. **관리자 조회는 `src/lib/admin/queries.ts`에만 둔다.** 공개 화면용 `src/lib/cards/queries.ts`는 anon 클라이언트를 쓰고 키워드를 표시용(`{ code, label }`)으로 되돌리므로, `keyword_id`가 필요한 관리자 폼에는 **재사용할 수 없다.** 형태가 비슷해 보여도 두 계층을 합치지 않는다.
 
 ### 3.4 workers/crawler — Cloudflare Workers
 
@@ -660,10 +666,12 @@ OP17-001_p2   루피 (SEC)
 | 경로 보호 | `src/proxy.ts`가 `/admin/*`에서 쿠키 존재를 확인해 로그인으로 보낸다 |
 | 값 검증 | 각 API가 `requireAdmin()`으로 쿠키 값을 직접 검증한다. proxy만 믿지 않는다 |
 | 쓰기 권한 | `service_role`(RLS 우회)이므로 인증 뒤에서만 호출한다 |
-| 화면 | `/admin`(대시보드) · `/admin/sets` · `/admin/keywords` · `/admin/cards/new` |
+| 화면 | `/admin`(대시보드) · `/admin/sets` · `/admin/keywords` · `/admin/cards`(목록 — 검색 · 페이지네이션) · `/admin/cards/new`(등록) · `/admin/cards/[cardId]`(수정 · 삭제) |
 | API | `POST /api/admin/session` · `POST /api/admin/sets` · `POST /api/admin/cards` · `PATCH·DELETE /api/admin/cards/[cardId]` |
 
-> ⚠️ **토큰 1개 = 전체 쓰기 권한**이다. 유출되면 카탈로그 전체를 조작할 수 있다. T3.1에서 계정 기반 권한으로 교체한다.
+> **카드 도달 경로는 목록(`/admin/cards`) 하나로 모은다.** 대시보드 표의 각 행도 같은 상세로 링크한다. 등록만 되고 다시 찾을 수 없는 상태가 T1.12 이전의 실제 문제였다(§8 T1.12).
+
+> ⚠️ **토큰 1개 = 전체 쓰기 권한**이다. 유출되면 카탈로그 전체를 조작할 수 있다. T3.1에서 계정 기반 권한으로 교체한다. **T1.12에서 삭제 화면이 생겨 노출 범위가 "등록·수정"에서 "카탈로그 삭제"까지 넓어졌다 — 재검토 시점은 §9.2 참조.**
 
 
 ---
@@ -700,8 +708,10 @@ OP17-001_p2   루피 (SEC)
 | POST | `/api/admin/keywords` | 효과 키워드 등록 |
 | POST | `/api/admin/news` | 뉴스 작성 |
 | PATCH · DELETE | `/api/admin/news/:postId` | 뉴스 수정(발행 토글 포함) · 삭제 |
-| POST | `/api/admin/cards` | 카드 등록 |
-| PATCH / DELETE | `/api/admin/cards/:cardId` | 카드 수정 · 삭제 |
+| POST | `/api/admin/cards` | 카드 등록 (`keyword_ids` 포함. 연결 실패 시 카드를 되돌린다) |
+| PATCH / DELETE | `/api/admin/cards/:cardId` | 카드 수정 · 삭제. **PATCH는 `keyword_ids`를 받아 태그를 전량 교체한다**(T1.12 이전에는 400으로 거부). 삭제는 하드 삭제 — §9.10 |
+
+> **키워드 재태깅은 앱 레벨 보상 트랜잭션이다.** 이전 `keyword_id` 목록을 읽어 두고 → `delete` → `insert` 하며, insert가 실패하면 읽어 둔 목록을 되돌려 넣는다. `POST /api/admin/cards`가 카드를 되돌리는 것과 같은 패턴으로, 되돌릴 대상이 **카드가 아니라 이전 태그 목록**이라는 점만 다르다. DB 트랜잭션(RPC)을 쓰지 않으므로 마이그레이션이 필요 없고, `service_role`의 `card_keywords` DELETE 권한은 마이그레이션 001에 이미 있다.
 
 **금지 엔드포인트** — 아래는 설계상 만들지 않는다.
 `GET /api/cards/:id/price-history` · `POST /api/market/batch` · `GET /api/cards/export` · 공개 API 키 발급
@@ -800,6 +810,13 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
 
 **데이터 의존 금지.** 도감 E2E는 카드가 몇 장 있는지를 전제하지 않는다. 카탈로그는 관리자가 직접 채우므로 양이 고정되지 않는다. 등록 후 반영은 관리자 E2E가 자기 데이터를 만들어 검증한다.
 
+**E2E 기준선은 `CI=1`(프로덕션 빌드) 기준으로 잡는다.**
+
+`playwright.config.ts`는 `CI`가 있으면 `npm run build && npm run start`로, 없으면 `next dev`로 서버를 띄운다. **두 모드는 결과가 다를 수 있다** — 프리페치 · 정적 프리렌더처럼 프로덕션에만 있는 동작은 dev E2E를 전부 통과해도 그대로 남는다(§2.7의 관리자 로그인 프리페치가 실제 사례이며, 배포 환경의 사용자도 겪던 버그였다). 따라서 §8에 "몇 건 ✅"을 적을 때는 **`CI=1` 실행 결과만** 쓴다. `webServer.timeout`이 300초인 것도 이 경로가 빌드를 포함하기 때문이다(120초로는 빌드 도중 끊긴다).
+
+- **`tests/e2e/global-setup.ts`** — 홈 · 도감 · 뉴스 · 관리자 로그인과 **상세 라우트**(존재하지 않는 id/슬러그)를 미리 요청해 첫 컴파일 · 최초 DB 연결 비용을 스펙 밖으로 밀어낸다. 404가 나도 라우트는 로드되므로 목적을 달성한다. **라우트를 추가하면 워밍업 목록에도 넣는다.**
+- **serial describe는 통과 건수를 왜곡한다.** 자기 데이터를 만들어 쓰는 spec 4개(`card-detail` · `news` · `cursor` · `filters`)가 `test.describe.configure({ mode: "serial" })`라, **앞의 1건이 깨지면 뒤가 통째로 "did not run"** 이 된다. 실패 1건이 실제로는 여러 건의 미검증을 뜻하므로 통과 건수만 보고 판단하지 않는다.
+
 **Developer 규칙:** 각 태스크는 `실패하는 테스트 커밋` → `구현 커밋` 순서를 지킨다 (AGENT.md).
 
 ---
@@ -857,40 +874,80 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
   - `npm run db:clean` / `db:sample` 등록, eslint에 `supabase/.temp/**` 무시 추가
   - `CLAUDE.md`의 `similar_group_id` 지정을 `base_code`로 갱신
   - 검증: `test` 66건 ✅ / `test:e2e` **42건** ✅(커서 3건 신규) / `build`에서 `/cards/[cardId]`·`/news/[slug]` `●` 유지
+  - **42건은 T1.12 착수 전 `CI=1`(프로덕션 빌드)로 처음 전수 검증했다** — 그전 수치는 serial describe의 미실행분(§7)이 섞여 실측된 적이 없었다. 그 과정에서 관리자 로그인 프리페치(제품 버그)와 콜드 라우트 타임아웃(하네스) 두 건을 고쳤다 (§2.7)
+
+- [ ] **T1.12** 관리자 운영 최소 완결 + 404/로딩 (§4.5, §5.1) — 아래 백로그 **A-1~3 · B-1~2 · D**를 묶었다
+  - 브랜치 `feat/t1-12-admin-ops` (T1.11을 `main`에 `--no-ff` 머지한 뒤 신설). **마이그레이션 0건 → `db:types` 재생성 없음**
+  - **착수 근거:** 관리자 화면에서 개별 카드에 도달하는 경로가 **0개**다. `src/app/admin/page.tsx`의 대시보드 표에는 행 링크가 없고 `/admin/cards` 라우트 자체가 없다. 게다가 `cards.name_ja`는 §4.4 기준 **일본 매물 검색의 유일한 키**이고 `code`는 §4.6의 `base_code`를 좌우하는데, 오타를 고칠 화면이 없다. 지금 병목은 코드가 아니라 **비어 있는 카탈로그**이므로(§9.1) 입력 도구를 고치는 것이 이후 전 작업의 처리량을 올린다
+  - [ ] **T1.12-1** `/admin/cards` 등록 카드 목록 — 검색 · 페이지네이션 · M
+    - 신설 `src/app/admin/cards/page.tsx` (RSC · `dynamic = "force-dynamic"`) / `src/lib/admin/queries.ts`에 `fetchAdminCards({ q, page })` 추가
+    - `src/app/admin/layout.tsx` nav에 "카드 목록"을 "카드 등록" 왼쪽에 추가 · `src/app/admin/page.tsx` 표의 각 행을 `/admin/cards/[cardId]`로 링크
+    - **`search_cards` RPC를 쓰지 않는다** — ⓐ `code`가 검색 대상에서 빠져 있고 ⓑ `security invoker`라 anon RLS 기준이며 ⓒ total을 주지 않는다. admin 클라이언트로 `code`·`name_ja`·`name_ko`를 `.or(...ilike...)` + `count: "exact"`로 직접 조회한다 (⚠ 입력 새니타이즈는 §2.7 "PostgREST `.or()` 문자열 필터")
+    - 재사용: 표 마크업은 `src/app/admin/news/page.tsx`를 따라간다. **공용 `AdminTable`을 만들지 않는다**(사용처 2곳, 추상화가 이르다) · `EmptyState` · `fetchCounts`의 `count: "exact"` 패턴
+    - 라우팅 확인 완료: `cards/new/`와 `cards/[cardId]/`는 충돌하지 않는다 — 정적 세그먼트가 먼저 매칭되고 카드 id는 uuid다
+    - **완료 기준:** 카드가 100장을 넘어도 코드·일본어명·한국어명으로 찾히고, 총 건수가 보이고, 2페이지로 넘어간다. E2E 1건(검색 + 페이지 이동)
+  - [ ] **T1.12-2** `/admin/cards/[cardId]` 수정 · 삭제 화면 · M
+    - 신설 `src/app/admin/cards/[cardId]/page.tsx` / `src/lib/admin/queries.ts`에 `fetchAdminCard(cardId)` 추가(`card_keywords(keyword_id)` 임베드 — §3.3 모듈 규칙 6)
+    - `src/components/features/admin/card-form.tsx`에 `cardId?` · `initial?` · `initialKeywordIds?`를 추가해 **등록·수정 겸용**으로 만든다. `CardEditForm`을 새로 만들지 않는다 — `use-admin-form.ts`가 이미 `method`·`resetOnSuccess`를 지원하고 `news-form.tsx`의 `postId?` 분기가 그대로 옮겨진다. `resetOnSuccess: !isEdit`(수정 폼을 비우면 방금 고친 내용이 사라진다), 키워드 초기값은 `initialKeywordIds ?? []`
+    - `news-delete-button.tsx` → `admin-delete-button.tsx`로 일반화(`endpoint` · `redirectTo` · `label`). 두 번째 사용처가 생긴 지금이 정확한 시점이다(T1.11의 `CardImage` 통합과 같은 판단). 확인 → 삭제 2단계 동작은 그대로 둔다. 기존 호출처는 `src/app/admin/news/[postId]/page.tsx` 1곳
+    - **완료 기준:** 목록 → 카드 클릭 → `name_ja` 수정 → 저장 → 도감에 반영. 삭제 → 목록에서 사라지고 `/cards/{id}`가 404. E2E 1건(등록 → 수정 → 삭제 왕복)이며 **이 스펙은 마지막에 자기 데이터를 지운다**(§9.9를 이 경로에서 해소)
+  - [ ] **T1.12-3** 키워드 재태깅 — `PATCH`의 400 제거 · S~M
+    - `src/app/api/admin/cards/[cardId]/route.ts` — 앱 레벨 보상 트랜잭션(이전 목록 확보 → delete → insert → 실패 시 재삽입). 계약은 §5.1 참조
+    - **T1.12-2와 묶이는 이유는 순서가 아니라 의존이다.** `CardForm`을 재사용하는 순간 수정 화면에 키워드 칩이 뜨고, 저장하면 400이 난다. 미루면 반쯤 깨진 화면이 남는다
+    - 권한 확인 완료 — 마이그레이션 001에서 `service_role`이 `card_keywords`에 `delete`를 이미 갖고 있다. **권한 마이그레이션 불필요**
+    - **완료 기준:** 키워드를 빼고 더한 뒤 저장 → 카드 상세의 칩과 `/cards?keywords=` 필터에 즉시 반영. T1.12-2의 E2E 왕복에 키워드 토글 1개 추가
+  - [ ] **T1.12-4** `not-found.tsx` + 상세 `loading.tsx` · S
+    - 신설 `src/app/not-found.tsx` · `src/app/(app)/cards/[cardId]/loading.tsx` · `src/app/(content)/news/[slug]/loading.tsx`
+    - `src/app/error.tsx`의 export 함수명 `GlobalError` → `RouteError` (1줄). 이 이름 때문에 `global-error.tsx`가 이미 있는 것으로 오인된다 — 현재 `src/app` 전체에 상태 파일은 `error.tsx` 하나뿐이다
+    - **루트 하나면 충분하다** — `src/app/layout.tsx`가 `Header`/`Footer`를 렌더하고 루트 `not-found.tsx`는 그 안에서 렌더되므로, 카드·뉴스 상세의 `notFound()`와 미매칭 URL을 한 파일이 모두 덮는다
+    - 재사용: `EmptyState` · `Skeleton` + `.aspect-card`. **새 스켈레톤 컴포넌트 파일을 만들지 않는다**(상세 로딩은 12줄이면 끝나고 `CardGridSkeleton`은 그리드용이라 맞지 않는다)
+    - **완료 기준:** `/cards/00000000-0000-0000-0000-000000000000` 방문 시 헤더·푸터가 있는 404 + "도감으로" 링크. E2E 1건(`page.goto()` 응답 status 404 + 헤더 표시)
+  - [ ] **T1.12-5** (스트레치) 관리자 인증 단위 테스트 · S
+    - `src/lib/admin/session.test.ts` · `src/lib/admin/responses.test.ts` · `vitest.config.mts`
+    - **선행 장애물:** `vitest.config.mts`에 `server-only` alias가 없으면 import 즉시 터진다 (§2.7). **T1.12-5를 못 끝내더라도 alias는 남긴다** — 다음 사람이 안 밟는다
+    - 케이스: `ADMIN_TOKEN` 미설정/15자 → throw · 길이가 다른 입력에 예외 없이 `false`(`safeEqual`의 길이 가드 회귀 방지 — 지우면 401이 500이 된다) · 해시 쿠키 통과/1글자 차이 거부 · `23505`·`23503`·`23502` 매핑과 **DB 원문이 응답 본문에 새지 않는지**
+    - `adminToken()`은 `process.env`를 모듈 로드 시가 아니라 **호출 시** 읽으므로 `vi.stubEnv`로 케이스마다 갈아끼울 수 있다(모듈 리셋 불필요)
+    - **왜 지금:** `session.ts`는 인터넷과 `service_role` 쓰기 사이의 유일한 방벽인데 지금은 E2E 401 1건으로만 간접 검증된다. T1.12-1~3이 그 쓰기 표면을 **넓힌다**(목록·수정·삭제·재태깅)
+  - [ ] **T1.12-6** 문서 갱신 — 본 문서 §3.2 · §4.5 · §5.1 · §8 · §9 (이 커밋에 포함)
+  - **주의**: `data-testid="form-error"`를 `field.tsx`(StatusMessage) · `admin-delete-button.tsx` · `admin-login-form.tsx` 세 곳이 공유하고 E2E 3곳이 **전역으로** 잡는다. 카드 수정 화면은 **폼과 삭제 버튼이 한 페이지에 공존**하므로 둘이 동시에 에러를 내면 Playwright strict mode가 "resolved to 2 elements"로 실패한다. 새 스펙은 `form` 또는 삭제 영역으로 범위를 좁혀 잡는다 — 위 T1.10 주의사항의 `listitem` 사고와 **같은 유형**(전역 셀렉터가 두 번째 사용처를 만나는 순간 깨진다)이다
+  - 검증 목표: `test` 66건 + T1.12-5 신규 / `test:e2e` **`CI=1`(프로덕션 빌드) 기준** 42건 + 신규 3건 (§7) / `build`에서 `/cards/[cardId]`·`/news/[slug]` `●` 유지(`/admin/**`은 `force-dynamic`이라 `ƒ`가 정상) / 마무리에 `npm run db:clean`
 
 **T1.11 리팩토링에서 확인한 백로그**
 
 우선순위 순. A는 **실사용을 막고 있다** — 카드를 등록할 수는 있는데 다시 찾거나 고칠 수단이 없다.
 
+> **A-1~3 · B-1~2 · D는 T1.12로 묶어 처리 중이다.** 나머지는 아래에 그대로 남으며, 각 항목에 T1.12에서 뺀 이유를 적었다.
+
 **A. 관리자 운영** (T1.6-A 미포함분)
 
-- [ ] 등록 카드 목록 — 검색 · 페이지네이션. 대시보드가 최근 20건만 보여 **등록한 카드를 다시 찾을 방법이 없다**
-- [ ] 카드 수정 · 삭제 UI — `PATCH`/`DELETE /api/admin/cards/[cardId]`는 이미 있고 화면만 없다
-- [ ] 키워드 재태깅 — `PATCH`가 `keyword_ids`를 400으로 명시 거부한다. 지금은 태그를 고치려면 카드를 지우고 다시 만들어야 한다
-- [ ] 세트 수정 · 삭제, 키워드 수정 · 삭제 (등록만 가능)
-- [ ] CSV 일괄 등록 — 수백 장을 폼 하나씩은 비현실적
+- [ ] **A-1** 등록 카드 목록 — 검색 · 페이지네이션. 대시보드가 최근 20건만 보이고 그 표에조차 링크가 없어 **등록한 카드를 다시 찾을 방법이 없다** → **T1.12-1**
+- [ ] **A-2** 카드 수정 · 삭제 UI — `PATCH`/`DELETE /api/admin/cards/[cardId]`는 이미 있고 화면만 없다 → **T1.12-2**
+- [ ] **A-3** 키워드 재태깅 — `PATCH`가 `keyword_ids`를 400으로 명시 거부한다. 지금은 태그를 고치려면 카드를 지우고 다시 만들어야 한다 → **T1.12-3**
+- [ ] **A-4** 세트 수정 · 삭제, 키워드 수정 · 삭제 (등록만 가능) — **T1.12 범위 밖.** 개수가 적고 "다시 못 찾는" 문제가 아니다. T1.12-2에서 `AdminDeleteButton`을 일반화해두면 각각 S로 줄어든다
+- [ ] **A-5** CSV 일괄 등록 — 수백 장을 폼 하나씩은 비현실적. **T1.12 범위 밖(L).** 중복 처리 · 부분 실패 · 드라이런 · 게임/세트 매핑 설계가 먼저다. 잘못 만들면 카탈로그를 덮어쓴다 — §4.4가 시드 스크립트를 삭제한 것과 같은 위험이라 **별도 설계 태스크로 분리**한다
 
 **B. 사용자 화면 — 없어서 티가 나는 것**
 
-- [ ] `not-found.tsx` — 지금은 `notFound()`가 헤더·푸터 없는 Next 기본 404를 낸다. 카드·뉴스 상세에서 실제로 발생하고, T1.10의 "상업 서비스로 보이게" 와 정면으로 어긋난다
-- [ ] `loading.tsx` — 카드 상세·뉴스 상세는 첫 요청에 생성되는 on-demand ISR이라 그 동안 빈 화면이다
-- [ ] `global-error.tsx` — 루트 `error.tsx`만 있다
-- [ ] 도감 결과 건수 표시 — `search_cards`가 total을 주지 않는다. count를 따로 받을지 커서 방식을 유지할지 판단 필요
-- [ ] 도감 정렬 옵션 (지금은 코드순 고정). 추가하면 커서 설계를 다시 봐야 한다 (§2.7 "커서 키 ≠ 유니크 키")
+- [ ] **B-1** `not-found.tsx` — 지금은 `notFound()`가 헤더·푸터 없는 Next 기본 404를 낸다. 카드·뉴스 상세에서 실제로 발생하고, T1.10의 "상업 서비스로 보이게" 와 정면으로 어긋난다 → **T1.12-4**
+- [ ] **B-2** `loading.tsx` — 확실한 이득은 **도감 그리드 → 카드 상세로 넘어가는 클라이언트 내비게이션** 구간이고, 실사용 경로도 그쪽이다 → **T1.12-4**
+  - ~~"첫 요청에 생성되는 on-demand ISR이라 그 동안 빈 화면"~~ → **사유를 교정한다.** 콜드 **문서** 요청은 blocking fallback이라 `loading.tsx`가 그 구간을 덮지 못할 가능성이 크다. **추정이며 실측으로 확정해야 한다** — 이 사유만 믿고 범위를 넓히지 말 것
+- [ ] **B-3** `global-error.tsx` — 루트 `error.tsx`만 있다. **T1.12 범위 밖.** 루트 레이아웃 자체가 터진 경우만 잡아 빈도가 낮고 `<html>`/`<body>`를 직접 렌더해야 해 검증이 번거롭다. 함수명 오인(`GlobalError`)만 T1.12-4에서 1줄 정리한다
+- [ ] **B-4** 도감 결과 건수 표시 — `search_cards`가 total을 주지 않는다. count를 따로 받을지 커서 방식을 유지할지 판단 필요. **T1.12 범위 밖**
+- [ ] **B-5** 도감 정렬 옵션 (지금은 코드순 고정). **T1.12 범위 밖** — 정렬 키를 바꾸면 커서 튜플도 바꿔야 하는데(§2.7 "커서 키 ≠ 유니크 키") 007에서 **방금 고친 곳**이다. 하루에 끼워 넣을 일이 아니다
 
-**C. 검색·데이터**
+**C. 검색·데이터** — 전부 **T1.12 범위 밖.** `search_cards` 재작성은 마이그레이션 008 + `db:types` 재생성을 부르는데, 카탈로그가 거의 비어 있어 지금 체감 이득이 0에 가깝다
 
-- [ ] `name_en`이 검색에서 빠져 있다 — `search_cards`는 `name_ja`/`name_ko`만 본다
-- [ ] `effect_text` 검색 — "카드를 뽑는다"로 찾고 싶은 수요가 크고, 키워드 태깅 수작업도 줄여준다
+- [ ] **C-1** `name_en`이 검색에서 빠져 있다 — `search_cards`는 `name_ja`/`name_ko`만 본다
+- [ ] **C-2** `effect_text` 검색 — "카드를 뽑는다"로 찾고 싶은 수요가 크고, 키워드 태깅 수작업도 줄여준다
 
-**D. 테스트 공백**
+**D. 테스트 공백** → **T1.12-5**(스트레치). 선행으로 `vitest.config.mts`의 `server-only` alias가 필요하다 (§2.7)
 
-- [ ] `src/lib/admin/session.ts` 무테스트 — `timingSafeEqual` 비교와 해시 쿠키 생성은 **인증의 핵심**인데 E2E의 401 확인으로만 간접 검증된다
-- [ ] `src/lib/admin/responses.ts` 무테스트 — PG 오류코드 매핑(23505/23503/23502)
+- [ ] **D-1** `src/lib/admin/session.ts` 무테스트 — `timingSafeEqual` 비교와 해시 쿠키 생성은 **인증의 핵심**인데 E2E의 401 확인으로만 간접 검증된다
+- [ ] **D-2** `src/lib/admin/responses.ts` 무테스트 — PG 오류코드 매핑(23505/23503/23502)
 
 **E. 운영**
 
-- [ ] `db:types`가 **로컬 Docker DB**를 가리킨다. 원격에만 적용하고 타입을 뽑으면 스키마와 조용히 어긋난다 — `db:reset` → `db:migrate` → `db:types` 순서를 지킬 것
+- [ ] `db:types`가 **로컬 Docker DB**를 가리킨다. 원격에만 적용하고 타입을 뽑으면 스키마와 조용히 어긋난다 — `db:reset` → `db:migrate` → `db:types` 순서를 지킬 것 (T1.12는 마이그레이션을 만들지 **않으므로** 이번엔 발생하지 않는다)
 - [ ] 나머지는 §9 참조 (사이트 URL · Node 22 · E2E 데이터 누적)
 
 ### Phase 2 — 핵심 유틸리티
@@ -924,11 +981,12 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
 ## 9. 미해결 — 결정이 필요한 사항
 
 1. **애드센스 심사 제출 전 준비물** — ①실제 기사 5~10편 발행(코드가 아니라 콘텐츠 문제) ②`NEXT_PUBLIC_SITE_URL`을 실제 도메인으로 교체 ③`ads.txt` 배치와 퍼블리셔 ID 입력 ④EEA 트래픽이 있으면 인증 CMP 도입. ~~플레이스홀더 페이지가 "제작 중"으로 보이는 것~~ → T1.10에서 `ComingSoon`으로 해소.
-2. **관리자 토큰의 수명** — 지금은 토큰 1개가 곧 전체 쓰기 권한이다. 유출되면 카탈로그 전체를 조작할 수 있다. T3.1까지 이 상태를 유지할지, 더 일찍 계정 기반으로 옮길지.
+2. **관리자 토큰의 수명** — 지금은 토큰 1개가 곧 전체 쓰기 권한이다. 유출되면 카탈로그 전체를 조작할 수 있다. T3.1까지 이 상태를 유지할지, 더 일찍 계정 기반으로 옮길지. **재검토 시점이 앞당겨졌다:** T1.12에서 `/admin/cards/[cardId]`에 삭제 버튼이 생겨 토큰 1개로 **카탈로그 삭제**까지 가능해졌다. 등록·수정만 되던 때는 잘못된 데이터가 남는 것이 최악이었지만, 이제는 하드 삭제(§9.10)라 **되돌릴 수 없다.** T3.1을 기다리지 말고 결정한다. **덧붙여, 이 토큰 로그인 흐름은 프로덕션 빌드에서만 깨져 있었고(§2.7 프리페치) 배포 환경에서는 로그인 자체가 되지 않았다.** 임시 인증이라 검증도 얇다는 뜻이므로 교체 판단에 함께 넣는다.
 3. **일본 중고 매물 사이트 약관** (T2.7 선행) — 메르카리 · 라쿠마 · 야후옥션의 이용약관 검토 결과를 `docs/crawler-compliance.md`에 기록해야 한다. 차단 시 대체 전략(공식 API · 제휴)이 필요하다.
 4. **카드 이미지 저장 방식** — 현재는 관리자가 외부 URL을 직접 입력한다. 핫링크 대신 자체 호스팅(Supabase Storage / R2)으로 갈지, 그 경우 저작권 처리를 어떻게 할지.
 5. **비로그인 매물 검색 허용 여부** — 허용 시 IP 해시 쿼터만으로 방어해야 해 우회 여지가 커진다. 로그인 필수면 방어력은 오르나 초기 유입이 준다.
 6. **환율 갱신 주기** — 기준가 KRW 환산 스냅샷 주기(일 1회 권장).
 7. **Node 버전** — 현재 20.15.1로 테스트 툴체인 4개를 하향 고정한 상태다(§2.5). 22 LTS로 올리면 해소된다.
-8. **원격 DB의 임시 데이터** — T1.10 디자인 확인용 샘플(세트 2 · 카드 8 · 키워드 3 · 기사 3)과 E2E가 매 실행마다 남기는 카드·세트·기사가 쌓여 있다. 샘플은 **카드명과 일러스트가 서로 맞지 않는 가짜 데이터**라 공개 전에 반드시 지워야 한다. `npm run db:clean` — 접두사 + 6자리 타임스탬프 정규식으로만 골라내므로 손으로 등록한 카드는 건드리지 않는다.
-9. **E2E가 데이터를 남긴다** — 각 spec이 `beforeAll`에서 만든 카드·세트·키워드를 지우지 않아 실행할수록 원격 DB에 누적된다. 지금은 `db:clean`으로 사후 정리하지만, `afterAll`에서 스스로 지우게 하거나 테스트 전용 프로젝트를 분리하는 편이 낫다.
+8. **원격 DB의 임시 데이터** — T1.10 디자인 확인용 샘플(세트 2 · 카드 8 · 키워드 3 · 기사 3)과 E2E가 매 실행마다 남기는 카드·세트·기사가 쌓여 있다. 샘플은 **카드명과 일러스트가 서로 맞지 않는 가짜 데이터**라 공개 전에 반드시 지워야 한다. `npm run db:clean` — 접두사 + 6자리 타임스탬프 정규식으로만 골라내므로 손으로 등록한 카드는 건드리지 않는다. **T1.12 착수 전 정리 후 실측: `cards` · `card_sets` · `keywords` · `news_posts` 모두 0행이다.** 손으로 등록한 데이터는 애초에 없었으므로 유실은 없고, T1.12의 착수 근거인 "지금 병목은 비어 있는 카탈로그"가 수치로 확인됐다.
+9. **E2E가 데이터를 남긴다** — 각 spec이 `beforeAll`에서 만든 카드·세트·키워드를 지우지 않아 실행할수록 원격 DB에 누적된다. **T1.12 착수 전 관측: 누적량은 두 차례 정리에서 각각 24행 · 7행 수준으로 작았고, 성능 저하는 아직 나타나지 않았다.** 즉 지금 문제는 성능이 아니라 **`db:clean`을 매번 잊지 않고 돌려야 하는 상태 그 자체**다. `afterAll`에서 스스로 지우게 하거나 테스트 전용 프로젝트를 분리하는 편이 낫다. T1.12-2의 등록 → 수정 → **삭제** 왕복 스펙은 자기 데이터를 지우므로 이 경로에서는 해소된다 — 나머지 스펙에 적용할 선례로 삼는다.
+10. **카드 삭제는 하드 삭제로 유지한다 (T1.12 결정)** — 참조하는 테이블이 아직 `card_keywords`뿐이고 여기에는 `on delete cascade`가 걸려 있어, soft-delete를 지금 도입하면 전 조회 경로에 `deleted_at is null` 조건을 다는 비용만 남는다. **전환 시점은 `deck_cards`(T2.3)와 `collection_items`(T3.2)가 들어올 때다.** 그때부터는 카드 1장을 지우는 것이 남의 덱과 컬렉션을 조용히 무너뜨리므로 하드 삭제를 유지할 수 없다. 두 마이그레이션 중 먼저 오는 쪽에서 재검토한다.
