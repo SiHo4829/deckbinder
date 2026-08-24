@@ -1,20 +1,17 @@
 import { NextResponse } from "next/server";
 
-import { requireAdmin } from "@/lib/admin/guard";
-import { databaseError, invalidInput } from "@/lib/admin/responses";
+import { requireAdminInput } from "@/lib/admin/input";
+import { databaseError } from "@/lib/admin/responses";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { keywordInputSchema } from "@/lib/validation/admin";
 
 export async function POST(request: Request) {
-  const denied = await requireAdmin();
-  if (denied) return denied;
-
-  const parsed = keywordInputSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return invalidInput(parsed.error);
+  const input = await requireAdminInput(request, keywordInputSchema);
+  if (!input.ok) return input.response;
 
   const { data, error } = await createSupabaseAdminClient()
     .from("keywords")
-    .insert(parsed.data)
+    .insert(input.data)
     .select("id,code,label_ko")
     .single();
 

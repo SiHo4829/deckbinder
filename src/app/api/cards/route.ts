@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAnonClient } from "@/lib/supabase/public";
 import { parseCardSearchParams } from "@/lib/validation/card";
 import type { CardListItem } from "@/types/card";
 
@@ -24,7 +24,8 @@ export async function GET(request: Request) {
     );
   }
 
-  const supabase = await createSupabaseServerClient();
+  // 공개 검색이라 쿠키가 필요 없다. 조회 계층과 같은 익명 클라이언트를 쓴다.
+  const supabase = createSupabaseAnonClient();
 
   // 다음 페이지 존재 여부를 알기 위해 1건 더 받는다.
   const { data, error } = await supabase.rpc("search_cards", {
@@ -37,6 +38,7 @@ export async function GET(request: Request) {
     p_card_type: params.cardType,
     p_keyword_codes: params.keywords.length > 0 ? params.keywords : undefined,
     p_cursor: params.cursor,
+    p_cursor_id: params.cursorId,
     p_limit: params.limit + 1,
   });
 
@@ -52,8 +54,10 @@ export async function GET(request: Request) {
   const hasMore = rows.length > params.limit;
   const items = hasMore ? rows.slice(0, params.limit) : rows;
 
+  const last = items.at(-1);
+
   return NextResponse.json({
     items,
-    nextCursor: hasMore ? (items.at(-1)?.code ?? null) : null,
+    nextCursor: hasMore && last ? { code: last.code, id: last.id } : null,
   });
 }

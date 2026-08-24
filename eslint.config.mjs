@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // supabase CLI 생성물. .gitignore에 있지만 flat config는 그것을 보지 않는다.
+    "supabase/.temp/**",
   ]),
 ]);
 

@@ -1,7 +1,7 @@
-import { ImageOff } from "lucide-react";
 import Link from "next/link";
 
-import { cardDisplayName, type CardListItem } from "@/types/card";
+import { CardImage } from "@/components/features/cards/card-image";
+import type { CardListItem } from "@/types/card";
 
 /**
  * 대체 카드 — 같은 카드의 다른 인쇄본(패러렐 등).
@@ -24,19 +24,7 @@ export function SimilarCards({ cards }: { cards: CardListItem[] }) {
           <li key={card.id}>
             <Link href={`/cards/${card.id}`} className="group block">
               <div className="relative aspect-card overflow-hidden rounded-lg border bg-surface-raised transition-shadow group-hover:shadow-md">
-                {card.image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- 원격 호스트 정책 미확정(§9.3)
-                  <img
-                    src={card.image_url}
-                    alt={cardDisplayName(card)}
-                    loading="lazy"
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="card-placeholder flex h-full w-full items-center justify-center">
-                    <ImageOff className="size-4 text-muted-foreground/30" aria-hidden />
-                  </div>
-                )}
+                <CardImage card={card} iconClassName="size-4" />
                 {card.rarity ? (
                   <span className="absolute top-1.5 right-1.5 rounded bg-foreground/85 px-1.5 py-0.5 text-[10px] font-medium text-background">
                     {card.rarity}

@@ -23,6 +23,8 @@ export const cardSearchParamsSchema = z.object({
   /** 선택한 키워드를 **모두** 가진 카드만 남긴다 (AND 조합) */
   keywords: z.array(z.string().trim().min(1)).default([]),
   cursor: optionalText,
+  /** 커서의 두 번째 키. code가 같은 카드들 사이에서 순서를 확정한다 (007). */
+  cursorId: z.uuid().optional(),
   // URL은 사용자가 직접 고칠 수 있으므로 범위를 벗어나면 400 대신 상한으로 잘라낸다.
   // 상한 100은 성능뿐 아니라 대량 수집 억제 목적이다 (plan P3).
   limit: z.coerce
@@ -51,7 +53,9 @@ function collectList(params: URLSearchParams, key: string): string[] {
 export function parseCardSearchParams(params: URLSearchParams): CardSearchParams {
   const raw: Record<string, unknown> = { keywords: collectList(params, "keywords") };
 
-  for (const key of ["q", "game", "set", "rarity", "attribute", "cardType", "cursor"]) {
+  for (const key of [
+    "q", "game", "set", "rarity", "attribute", "cardType", "cursor", "cursorId",
+  ]) {
     const value = params.get(key);
     if (value !== null && value.trim().length > 0) raw[key] = value;
   }

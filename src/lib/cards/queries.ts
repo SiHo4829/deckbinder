@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { createSupabaseAnonClient } from "@/lib/supabase/public";
 import type { CardDetail, CardListItem } from "@/types/card";
 
@@ -8,8 +10,16 @@ import type { CardDetail, CardListItem } from "@/types/card";
 const DETAIL_COLUMNS =
   "id,code,base_code,name_ko,name_ja,name_en,rarity,attribute,card_type,sub_type,image_url,effect_text,set_id,game_id";
 
-/** 상세 페이지용 카드 1건. 없으면 null. */
-export async function fetchCardDetail(cardId: string): Promise<CardDetail | null> {
+/**
+ * 상세 페이지용 카드 1건. 없으면 null.
+ *
+ * `cache()`로 감싼 이유: 같은 렌더에서 generateMetadata와 페이지 본문이 각각
+ * 이 함수를 부른다. Next 15+ 에서 fetch의 기본은 캐시하지 않음이라 감싸지 않으면
+ * **요청마다 DB를 두 번 왕복한다.** 캐시 범위는 렌더 1회이므로 최신성은 그대로다.
+ */
+export const fetchCardDetail = cache(async (
+  cardId: string,
+): Promise<CardDetail | null> => {
   const supabase = createSupabaseAnonClient();
 
   const { data, error } = await supabase
@@ -39,7 +49,7 @@ export async function fetchCardDetail(cardId: string): Promise<CardDetail | null
       .filter((k): k is { code: string; label_ko: string } => k !== null)
       .map((k) => ({ code: k.code, label: k.label_ko })),
   } as CardDetail;
-}
+});
 
 /**
  * 대체 카드 — 같은 게임에서 base_code가 같은 다른 인쇄본.

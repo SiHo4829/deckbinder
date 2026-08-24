@@ -38,7 +38,7 @@ DeckBinder(덱바인더)는 TCG 플레이어와 컬렉터를 위한 종합 서�
      - Display only **a single benchmark average price** (SNKRDUNK-style baseline).
    - **Database Architecture:**
      - Card DB must support tag-based search for TCG effect keywords (e.g., `Draw`, `Energy Accelerate`).
-     - Cards with identical/interchangeable in-game performance must be grouped together using a `similar_group_id` foreign key.
+     - Cards that are the same card in play (different printings — parallel/alt art) are grouped by `base_code`, a generated column that strips the printing suffix from `code`. This replaced the original `similar_group_id` FK, which was dropped in migration 007 (see `.claude/plan.md` §4.6).
 
 3. **Code Quality Standards:**
    - Maintain strict typing; avoid `any` wherever possible.

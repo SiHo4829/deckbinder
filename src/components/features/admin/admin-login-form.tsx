@@ -31,8 +31,12 @@ export function AdminLoginForm() {
       return;
     }
 
-    router.push(params.get("next") ?? "/admin");
+    // 로그인 화면에도 관리자 레이아웃의 nav가 렌더되므로, 프로덕션 빌드에서는
+    // Next가 그 <Link>의 /admin을 비로그인 상태로 미리 가져간다. 그 프리페치 결과는
+    // "로그인으로 리다이렉트"라, 먼저 버리지 않으면 로그인 직후 다시 튕긴다.
+    // dev는 프리페치를 하지 않아 이 문제가 드러나지 않는다.
     router.refresh();
+    router.push(params.get("next") ?? "/admin");
   }
 
   return (

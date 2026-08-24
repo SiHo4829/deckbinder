@@ -1,9 +1,9 @@
-import { ImageOff } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { BasePriceBadge } from "@/components/features/cards/base-price-badge";
+import { CardImage } from "@/components/features/cards/card-image";
 import { SimilarCards } from "@/components/features/cards/similar-cards";
 import { fetchCardAlternatives, fetchCardDetail } from "@/lib/cards/queries";
 import { cardDisplayName } from "@/types/card";
@@ -67,21 +67,7 @@ export default async function CardDetailPage(props: PageProps<"/cards/[cardId]">
         <div className="flex flex-col gap-4">
           {/* 이미지가 없는 카드가 기본이라고 보고 그린다 (plan §4.4). */}
           <div className="aspect-card overflow-hidden rounded-xl border bg-surface-raised shadow-sm">
-            {card.image_url ? (
-              // eslint-disable-next-line @next/next/no-img-element -- 원격 호스트 정책 미확정(§9.3)
-              <img
-                src={card.image_url}
-                alt={name}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="card-placeholder flex h-full w-full flex-col items-center justify-center gap-2">
-                <ImageOff className="size-7 text-muted-foreground/30" aria-hidden />
-                <span className="font-mono text-xs text-muted-foreground/60">
-                  {card.code}
-                </span>
-              </div>
-            )}
+            <CardImage card={card} showCode iconClassName="size-7" priority />
           </div>
 
           {/* card_prices는 T2.8에 생긴다. 그때까지 항상 "산출 불가"다. */}
