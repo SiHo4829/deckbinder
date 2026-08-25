@@ -13,7 +13,7 @@
  * | tests/e2e/card-detail.spec.ts | 세트/카드 `D######` · 키워드 `d######draw` |
  * | tests/e2e/filters.spec.ts | 세트/카드 `F######` · 키워드 `f######draw|counter` |
  * | tests/e2e/cursor.spec.ts | 카드 `DUP-######` |
- * | tests/e2e/news.spec.ts | 기사 `pub-######` · `draft-######` |
+ * | tests/e2e/news.spec.ts | 기사 `pub-######` · `unpub-######` · `draft-######` |
  * | tests/e2e/admin-cards.spec.ts | 카드 `PGE######-###`(페이지네이션 — 스스로 지우지 않는다) · 키워드 `rt######kw`(수정 왕복 — 카드 자체는 스스로 지운다) |
  */
 async function main() {
@@ -49,7 +49,7 @@ async function main() {
   // 카드를 먼저 지워야 세트가 지워진다. card_keywords는 cascade라 따로 안 지운다.
   console.log("기사");
   await delMatch("news_posts", "slug", `^smpl-`);
-  await delMatch("news_posts", "slug", `^(pub|draft)-${STAMP}$`);
+  await delMatch("news_posts", "slug", `^(pub|unpub|draft)-${STAMP}$`);
 
   console.log("카드");
   await delMatch("cards", "code", `^SMPL`);

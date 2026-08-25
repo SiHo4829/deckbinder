@@ -4,15 +4,16 @@ import { notFound } from "next/navigation";
 
 import { AdSlot } from "@/components/common/ad-slot";
 import { NewsArticle } from "@/components/features/news/news-article";
-import { fetchPostBySlug, fetchPublishedSlugs } from "@/lib/news/queries";
+import { fetchPostBySlug } from "@/lib/news/queries";
 
-export const revalidate = 300;
-
-/** 발행된 글은 미리 생성한다. 이후 발행분은 dynamicParams로 처리된다. */
-export async function generateStaticParams() {
-  const posts = await fetchPublishedSlugs();
-  return posts.map((p) => ({ slug: p.slug }));
-}
+// 이 라우트는 동적이다 — 발행 취소한 글이 즉시 404가 되어야 하기 때문이다.
+// ISR(revalidate = 300)이었을 때는 그 세그먼트 값이 Supabase 조회 fetch까지
+// 태그 없는 Data Cache 항목으로 만들었고, 그 항목은 어떤 무효화로도 비워지지
+// 않아 내린 글이 계속 200으로 열렸다(§2.7 — 실측).
+//
+// generateStaticParams를 함께 뺐다. force-dynamic과 공존할 수 없고, 덤으로
+// 빌드가 더 이상 DB에 의존하지 않는다.
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata(
   props: PageProps<"/news/[slug]">,

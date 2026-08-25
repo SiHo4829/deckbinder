@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     return databaseError(error, "뉴스를 저장하지 못했습니다.", "POST /api/admin/news");
   }
 
-  revalidateNews(data.slug);
+  revalidateNews();
 
   return NextResponse.json({ post: data }, { status: 201 });
 }

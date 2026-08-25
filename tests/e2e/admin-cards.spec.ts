@@ -87,6 +87,14 @@ test.describe("관리자 카드 목록", () => {
     const cardId = page.url().split("/").pop()!;
     await expect(page.getByText(code, { exact: true })).toBeVisible();
 
+    // 수정 *전에* 상세를 한 번 방문해 둔다 — 삭제 쪽과 같은 이유다. 방문한 적
+    // 없는 URL은 캐시 항목 자체가 없어 "수정이 즉시 반영된다"가 우연히 통과한다
+    // (T1.12-7 완료 기준 2).
+    const beforeEditRes = await page.goto(`/cards/${cardId}`);
+    expect(beforeEditRes?.status()).toBe(200);
+    await expect(page.getByRole("heading", { name: nameJa })).toBeVisible();
+    await page.goto(`/admin/cards/${cardId}`);
+
     // 이름을 고치고 키워드를 하나 켠 뒤 저장한다.
     await page.getByLabel("일본어 카드명").fill(nameJaEdited);
     await page.getByRole("button", { name: keywordLabel, exact: true }).click();
@@ -104,6 +112,13 @@ test.describe("관리자 카드 목록", () => {
     // 이 테스트에서만 쓰는 고유 키워드만으로 좁힌다.
     await page.goto(`/cards?keywords=${keywordCode}`);
     await expect(page.locator("article").first()).toContainText(code);
+
+    // 삭제 *전에* 상세를 한 번 더 방문해 둔다 — 사람이 실제로 하는 순서
+    // (상세를 열어 확인 → 삭제)를 재현해야 회귀를 잡는다. 방문한 적 없는 URL은
+    // Data Cache 항목 자체가 없어 무효화 여부와 무관하게 우연히 통과한다
+    // (T1.12-7 완료 기준 3).
+    const beforeDeleteRes = await page.goto(`/cards/${cardId}`);
+    expect(beforeDeleteRes?.status()).toBe(200);
 
     // 삭제 — 확인 → 삭제 2단계.
     await page.goto(`/admin/cards/${cardId}`);

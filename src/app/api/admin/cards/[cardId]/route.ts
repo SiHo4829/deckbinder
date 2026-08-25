@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin/guard";
 import { requireAdminInput } from "@/lib/admin/input";
 import { databaseError } from "@/lib/admin/responses";
-import { revalidateCardDetail } from "@/lib/cards/revalidate";
+import { revalidateCards } from "@/lib/cards/revalidate";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { cardInputSchema } from "@/lib/validation/admin";
 
@@ -88,7 +88,7 @@ export async function PATCH(
 
   // `/cards/[cardId]`는 ISR(revalidate=3600)이라 캐시가 자연 만료될 때까지
   // 낡은 내용이 남는다. news의 revalidateNews와 같은 패턴으로 즉시 비운다.
-  revalidateCardDetail(cardId);
+  revalidateCards();
 
   return NextResponse.json({ card: data });
 }
@@ -111,7 +111,7 @@ export async function DELETE(
   }
 
   // 삭제 후에도 ISR 캐시가 남아 있으면 지운 카드가 계속 200으로 보인다.
-  revalidateCardDetail(cardId);
+  revalidateCards();
 
   return NextResponse.json({ ok: true });
 }
