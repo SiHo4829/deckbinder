@@ -22,6 +22,14 @@ export interface AdminSetDetail {
   released_at: string | null;
 }
 
+export interface AdminKeywordDetail {
+  id: string;
+  code: string;
+  game_id: string;
+  label_ko: string;
+  label_ja: string | null;
+}
+
 export interface KeywordOption {
   id: string;
   code: string;

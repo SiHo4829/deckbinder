@@ -14,23 +14,46 @@ import type { GameOption } from "@/types/admin";
 
 const EMPTY = { game_id: "", code: "", label_ko: "", label_ja: "" };
 
-export function KeywordForm({ games }: { games: GameOption[] }) {
+export type KeywordFormValues = typeof EMPTY;
+
+/** 등록·수정 겸용 (T1.15b). `keywordId`가 있으면 수정이다 — set-form.tsx와 같은 형태. */
+export function KeywordForm({
+  games,
+  keywordId,
+  initial,
+}: {
+  games: GameOption[];
+  /** 있으면 수정 모드 */
+  keywordId?: string;
+  initial?: Partial<KeywordFormValues>;
+}) {
   const router = useRouter();
+  const isEdit = keywordId !== undefined;
   const { values, setValue, status, pending, submit } = useAdminForm({
     empty: EMPTY,
-    initial: { game_id: games[0]?.id ?? "" },
-    endpoint: "/api/admin/keywords",
-    successText: (v) => `키워드 ${v.label_ko} 등록 완료`,
+    initial: { game_id: games[0]?.id ?? "", ...initial },
+    endpoint: isEdit ? `/api/admin/keywords/${keywordId}` : "/api/admin/keywords",
+    method: isEdit ? "PATCH" : "POST",
+    resetOnSuccess: !isEdit,
+    successText: (v) =>
+      isEdit ? `키워드 ${v.label_ko} 저장 완료` : `키워드 ${v.label_ko} 등록 완료`,
     keepOnSuccess: (v) => ({ game_id: v.game_id }),
     onSuccess: () => router.refresh(),
   });
 
   return (
     <form onSubmit={submit} className="flex max-w-lg flex-col gap-4">
-      <Field label="게임" htmlFor="kw-game" required>
+      {/*
+        수정 모드에서는 게임을 잠근다 — 세트보다 여기가 더 위험하다. keywords는
+        게임을 참조하는 FK가 없어서 게임을 바꿔도 **에러 없이 저장되고**, 다른
+        게임 카드에 태그가 붙은 채 남아 도감 필터가 조용히 어긋난다
+        (plan T1.15a ⓐ).
+      */}
+      <Field label="게임" htmlFor="kw-game" required hint={isEdit ? "수정할 수 없습니다." : undefined}>
         <NativeSelect
           id="kw-game"
           value={values.game_id}
+          disabled={isEdit}
           onChange={(e) => setValue("game_id", e.target.value)}
         >
           {games.map((g) => (
@@ -75,7 +98,7 @@ export function KeywordForm({ games }: { games: GameOption[] }) {
       <StatusMessage status={status} />
 
       <Button type="submit" disabled={pending}>
-        {pending ? "저장 중…" : "키워드 등록"}
+        {pending ? "저장 중…" : isEdit ? "저장" : "키워드 등록"}
       </Button>
     </form>
   );

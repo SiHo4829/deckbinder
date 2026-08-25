@@ -3,6 +3,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type {
   AdminCardRow,
+  AdminKeywordDetail,
   AdminSetDetail,
   GameOption,
   KeywordOption,
@@ -54,6 +55,34 @@ export async function fetchSetCardCount(setId: string): Promise<number> {
     .from("cards")
     .select("id", { count: "exact", head: true })
     .eq("set_id", setId);
+  return count ?? 0;
+}
+
+/** `/admin/keywords/[keywordId]` 수정 화면용 단건 조회. 없으면 null. */
+export async function fetchAdminKeyword(
+  keywordId: string,
+): Promise<AdminKeywordDetail | null> {
+  const { data } = await createSupabaseAdminClient()
+    .from("keywords")
+    .select("id,code,game_id,label_ko,label_ja")
+    .eq("id", keywordId)
+    .maybeSingle();
+  return data ?? null;
+}
+
+/**
+ * 이 키워드가 붙은 카드 수.
+ *
+ * **세트와 방향이 반대다.** `card_keywords.keyword_id`는 `on delete cascade`라
+ * 삭제가 막히지 않고 **조용히 성공하면서 태그만 사라진다.** 그래서 이 값은
+ * 사전 차단용이 아니라 **경고 문구 전용**이다 — 누르기 전에 무엇을 잃는지
+ * 보여주는 것이 유일한 방어다(plan T1.15a ⓑ).
+ */
+export async function fetchKeywordCardCount(keywordId: string): Promise<number> {
+  const { count } = await createSupabaseAdminClient()
+    .from("card_keywords")
+    .select("card_id", { count: "exact", head: true })
+    .eq("keyword_id", keywordId);
   return count ?? 0;
 }
 

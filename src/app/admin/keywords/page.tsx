@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { KeywordForm } from "@/components/features/admin/keyword-form";
 import { fetchGames, fetchKeywords } from "@/lib/admin/queries";
 
@@ -26,12 +28,18 @@ export default async function AdminKeywordsPage() {
         ) : (
           <ul className="flex flex-wrap gap-2">
             {keywords.map((k) => (
-              <li key={k.id} className="rounded border px-2 py-1 text-xs">
-                {k.label_ko}
-                <span className="ml-1.5 font-mono text-muted-foreground">{k.code}</span>
-                <span className="ml-1.5 text-muted-foreground">
-                  · {gameName.get(k.game_id) ?? "?"}
-                </span>
+              <li key={k.id}>
+                {/* 세트와 같은 이유로 별도 목록 라우트를 만들지 않는다 (plan T1.15a ⓒ) */}
+                <Link
+                  href={`/admin/keywords/${k.id}`}
+                  className="block rounded border px-2 py-1 text-xs hover:bg-accent"
+                >
+                  {k.label_ko}
+                  <span className="ml-1.5 font-mono text-muted-foreground">{k.code}</span>
+                  <span className="ml-1.5 text-muted-foreground">
+                    · {gameName.get(k.game_id) ?? "?"}
+                  </span>
+                </Link>
               </li>
             ))}
           </ul>
