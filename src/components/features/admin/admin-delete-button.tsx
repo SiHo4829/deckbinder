@@ -23,11 +23,17 @@ import { Button } from "@/components/ui/button";
  * `<form>` 내부에 두면 버튼의 기본 `type`이 없을 때 `submit`으로 동작해 클릭 시
  * 폼이 함께 제출될 수 있다 — 안전장치로 아래 버튼엔 `type="button"`을 명시해 두었지만,
  * 배치 자체도 `<form>` 밖을 원칙으로 한다.
+ *
+ * `description`(T1.15a)은 확인 단계(2단계, "삭제" 클릭 후)에만 보이는 경고 한 줄이다.
+ * 세트·키워드처럼 삭제가 다른 행에 영향을 주거나 실패할 수 있는 대상에서, 실제로
+ * 요청을 보내기 전에 그 사실을 미리 알린다. 넘기지 않으면(카드·기사) 지금과
+ * 동일하게 동작한다 — 가산 prop이다.
  */
 export function AdminDeleteButton({
   endpoint,
   redirectTo,
   label,
+  description,
 }: {
   /** DELETE 요청을 보낼 API 경로. 예: `/api/admin/cards/${cardId}` */
   endpoint: string;
@@ -35,6 +41,8 @@ export function AdminDeleteButton({
   redirectTo: string;
   /** 확인 버튼 문구에 넣을 대상 이름. 예: 카드 코드, 기사 제목 */
   label: string;
+  /** 확인 단계(2단계)에서만 보이는 경고 한 줄. 예: "카드 3장이 이 세트를 쓰고 있습니다." */
+  description?: string;
 }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
@@ -91,6 +99,12 @@ export function AdminDeleteButton({
           </div>
         )}
       </div>
+
+      {confirming && description ? (
+        <p data-testid="admin-delete-warning" className="mt-2 text-xs text-destructive">
+          {description}
+        </p>
+      ) : null}
 
       {error ? (
         <p role="alert" data-testid="form-error" className="mt-2 text-xs text-destructive">

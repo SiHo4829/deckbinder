@@ -13,6 +13,15 @@ export interface SetOption {
   game_id: string;
 }
 
+export interface AdminSetDetail {
+  id: string;
+  code: string;
+  game_id: string;
+  name_ja: string;
+  name_ko: string | null;
+  released_at: string | null;
+}
+
 export interface KeywordOption {
   id: string;
   code: string;

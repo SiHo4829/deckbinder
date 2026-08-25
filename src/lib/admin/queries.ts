@@ -3,6 +3,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type {
   AdminCardRow,
+  AdminSetDetail,
   GameOption,
   KeywordOption,
   SetOption,
@@ -31,6 +32,29 @@ export async function fetchSets(): Promise<SetOption[]> {
     .select("id,code,name_ja,game_id")
     .order("code");
   return data ?? [];
+}
+
+/** `/admin/sets/[setId]` 수정 화면용 단건 조회. 없으면 null. */
+export async function fetchAdminSet(setId: string): Promise<AdminSetDetail | null> {
+  const { data } = await createSupabaseAdminClient()
+    .from("card_sets")
+    .select("id,code,game_id,name_ja,name_ko,released_at")
+    .eq("id", setId)
+    .maybeSingle();
+  return data ?? null;
+}
+
+/**
+ * 이 세트를 참조하는 카드 수. 세트 삭제 확인 문구(`AdminDeleteButton.description`)와
+ * `DELETE /api/admin/sets/[setId]`의 사전 카운트가 같은 값을 쓴다 — `cards.set_id`가
+ * `on delete restrict`라 0이 아니면 삭제가 막힌다(plan T1.15a ⓑ).
+ */
+export async function fetchSetCardCount(setId: string): Promise<number> {
+  const { count } = await createSupabaseAdminClient()
+    .from("cards")
+    .select("id", { count: "exact", head: true })
+    .eq("set_id", setId);
+  return count ?? 0;
 }
 
 export async function fetchKeywords(): Promise<KeywordOption[]> {

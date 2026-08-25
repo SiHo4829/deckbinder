@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { SetForm } from "@/components/features/admin/set-form";
 import { fetchGames, fetchSets } from "@/lib/admin/queries";
 
@@ -24,8 +26,18 @@ export default async function AdminSetsPage() {
         ) : (
           <ul className="flex flex-wrap gap-2">
             {sets.map((s) => (
-              <li key={s.id} className="rounded border px-2 py-1 text-xs">
-                <span className="font-mono">{s.code}</span> · {s.name_ja}
+              <li key={s.id}>
+                {/*
+                  별도 목록 라우트를 만들지 않는다 — 세트는 개수가 적어 이 목록
+                  하나로 충분하다. 카드가 /admin/cards를 따로 가진 이유는 수백 장이
+                  되기 때문이고, 그 전제가 여기엔 없다 (plan T1.15a ⓒ).
+                */}
+                <Link
+                  href={`/admin/sets/${s.id}`}
+                  className="block rounded border px-2 py-1 text-xs hover:bg-accent"
+                >
+                  <span className="font-mono">{s.code}</span> · {s.name_ja}
+                </Link>
               </li>
             ))}
           </ul>

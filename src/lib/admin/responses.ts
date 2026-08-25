@@ -25,14 +25,23 @@ export function invalidInput(error: z.ZodError): NextResponse {
   );
 }
 
+/**
+ * 같은 PG 코드가 호출부마다 다른 뜻을 가질 수 있다. 예를 들어 23503(foreign_key_violation)은
+ * 카드 등록에서는 "세트가 이 게임에 속하지 않는다"는 뜻이지만, 세트 삭제에서는
+ * "카드가 이 세트를 참조 중이다"는 뜻이다 — 기본 문구를 그대로 쓰면 원인이
+ * 설명되지 않는다. `overrides`는 그 호출부 한정으로 문구만 바꾼다. 상태 코드는
+ * 여전히 `PG_ERROR`가 정한다(가산 변경 — 넘기지 않으면 기존 동작 그대로다).
+ */
 export function databaseError(
   error: { code?: string; message?: string },
   fallback: string,
   context: string,
+  overrides?: Partial<Record<string, string>>,
 ): NextResponse {
   const known = error.code ? PG_ERROR[error.code] : undefined;
   if (known) {
-    return NextResponse.json({ error: known.message }, { status: known.status });
+    const message = (error.code ? overrides?.[error.code] : undefined) ?? known.message;
+    return NextResponse.json({ error: message }, { status: known.status });
   }
 
   // 예상 못 한 오류는 원문을 서버에만 남기고 클라이언트에는 일반 문구를 준다.
