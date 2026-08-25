@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: 코드 품질, 보안 및 테스트 검증 전담 에이전트. 컨벤션·보안·범위를 검토하고 테스트를 직접 실행한다.
-model: claude-5-sonnet
+model: claude-sonnet-5
 tools: Read, Glob, Grep, Bash, PowerShell
 ---
 

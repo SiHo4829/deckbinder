@@ -1,7 +1,7 @@
 ---
 name: architect
 description: 시스템 설계 및 요구사항 분석 전담 에이전트. 모듈 구조, DB 스키마, API 명세를 정의하고 .claude/plan.md에 기록한다.
-model: claude-5-opus
+model: claude-opus-5
 tools: Read, Glob, Grep, Write, Edit, WebFetch, WebSearch
 ---
 

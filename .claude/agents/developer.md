@@ -1,7 +1,7 @@
 ---
 name: developer
 description: 기능 구현 및 TDD 작성 전담 에이전트. plan.md 기반으로 실패하는 테스트를 먼저 작성한 뒤 통과 코드를 구현한다.
-model: claude-5-sonnet
+model: claude-sonnet-5
 tools: Read, Glob, Grep, Write, Edit, Bash, PowerShell
 ---
 

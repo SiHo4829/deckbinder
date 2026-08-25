@@ -43,7 +43,7 @@ export async function PATCH(
     return databaseError(error, "뉴스를 수정하지 못했습니다.", "PATCH /api/admin/news");
   }
 
-  revalidateNews(data.slug, existing.slug);
+  revalidateNews();
 
   return NextResponse.json({ post: data });
 }
@@ -69,7 +69,7 @@ export async function DELETE(
     return databaseError(error, "뉴스를 삭제하지 못했습니다.", "DELETE /api/admin/news");
   }
 
-  if (existing) revalidateNews(existing.slug);
+  if (existing) revalidateNews();
   else revalidatePath("/news");
 
   return NextResponse.json({ ok: true });

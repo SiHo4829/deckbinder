@@ -8,19 +8,16 @@ import { SimilarCards } from "@/components/features/cards/similar-cards";
 import { fetchCardAlternatives, fetchCardDetail } from "@/lib/cards/queries";
 import { cardDisplayName } from "@/types/card";
 
-// 도감 상세는 색인 대상이다. 카드가 많아 빌드 시 전부 생성하지는 않고,
-// 첫 요청에서 렌더한 뒤 캐시한다(on-demand ISR).
-export const revalidate = 3600;
-
-/**
- * 빈 배열을 반환해 빌드 시에는 아무것도 생성하지 않는다.
- * generateStaticParams 자체가 없으면 동적 라우트는 요청마다 렌더되지만,
- * 있으면 dynamicParams(기본 true)로 첫 요청에 생성한 뒤 캐시된다.
- * 카드가 수천 장이 될 수 있어 빌드 시간을 늘리지 않으려는 선택이다.
- */
-export function generateStaticParams() {
-  return [];
-}
+// 이 라우트는 동적이다 — 카드를 고치거나 지운 직후 첫 방문에 그것이 반영되어야
+// 하기 때문이다. on-demand ISR(revalidate = 3600)이었을 때는 그 세그먼트 값이
+// Supabase 조회 fetch까지 태그 없는 Data Cache 항목으로 만들었고, 그 항목이
+// 어떤 무효화로도 비워지지 않아 **삭제한 카드가 최대 1시간 동안 200을 계속
+// 돌려줬다**(§2.7 — 실측). 색인은 SSR이라 그대로다.
+//
+// 빌드에서 잃는 것은 없다 — generateStaticParams는 빈 배열을 반환해 애초에
+// 아무것도 프리렌더하지 않았고, 빌드 표의 `●`는 "첫 요청에 생성 후 캐시"였다.
+// 그 캐시가 바로 위 사고의 본체다.
+export const dynamic = "force-dynamic";
 
 // 서버 컴포넌트로 직접 조회한다 (CLAUDE.md: RSC 기본).
 export async function generateMetadata(

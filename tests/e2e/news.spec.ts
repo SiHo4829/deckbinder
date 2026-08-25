@@ -136,15 +136,45 @@ test.describe("뉴스", () => {
     await page.getByRole("button", { name: "저장" }).click();
     await expect(page.getByTestId("form-status")).toContainText("저장 완료");
 
-    // revalidatePath는 다음 방문 시점에 반영된다.
-    await expect
-      .poll(
-        async () => {
-          await page.goto("/news");
-          return page.getByText(draftTitle).count();
-        },
-        { timeout: 20_000 },
-      )
-      .toBeGreaterThan(0);
+    // 첫 방문에 보인다 — /news는 동적이다(T1.12-7). ISR이던 때는 여기서
+    // 재방문 폴링이 필요했고, 그마저도 실제로는 듣지 않았다(§2.7).
+    // 제목은 h2와 요약("…글 요약") 두 곳에 나타나므로 링크로 좁힌다.
+    await page.goto("/news");
+    await expect(page.getByRole("link", { name: new RegExp(draftTitle) })).toBeVisible();
+  });
+
+  // 내려야 할 글이 계속 열리는 것은 지연이 아니라 사고다. 위 "초안은 주소를
+  // 알아도 404다"는 처음부터 초안인 글이라 이 경로를 덮지 못한다 —
+  // **한 번 열어 본 뒤** 내린 글이어야 캐시가 관여한다(T1.12-7 완료 기준 4).
+  test("발행을 취소하면 상세가 즉시 404다", async ({ page }) => {
+    await login(page);
+
+    const slug = `unpub-${stamp}`;
+    const title = `취소글${stamp}`;
+
+    await page.goto("/admin/news/new");
+    await page.getByLabel("슬러그").fill(slug);
+    await page.getByLabel("제목").fill(title);
+    await page.getByLabel("요약").fill("요약");
+    await page.getByLabel("본문").fill("본문");
+    await page.getByLabel("발행 상태").selectOption({ label: "발행" });
+    await page.getByRole("button", { name: "등록" }).click();
+    await expect(page.getByTestId("form-status")).toContainText("등록 완료");
+
+    // 먼저 열어 본다 — 이 방문이 캐시를 만든다.
+    const published = await page.goto(`/news/${slug}`);
+    expect(published?.status()).toBe(200);
+
+    await page.goto("/admin/news");
+    await page
+      .getByRole("row", { name: new RegExp(title) })
+      .getByRole("link", { name: "수정" })
+      .click();
+    await page.getByLabel("발행 상태").selectOption({ label: "초안" });
+    await page.getByRole("button", { name: "저장" }).click();
+    await expect(page.getByTestId("form-status")).toContainText("저장 완료");
+
+    const unpublished = await page.goto(`/news/${slug}`);
+    expect(unpublished?.status()).toBe(404);
   });
 });
