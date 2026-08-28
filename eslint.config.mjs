@@ -45,6 +45,26 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  {
+    // plan §4.8 ⓒ — 카탈로그 수집기는 로컬 스크립트 전용이다. parse.ts가
+    // jsdom(devDependency)을 쓰는데, src/lib/ 아래에 있으면 「lib에 있으니
+    // 써도 되겠지」로 읽힌다. 사람 눈이 아니라 npm run lint로 옮긴다.
+    files: ["src/app/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/lib/catalog", "@/lib/catalog/*"],
+              message:
+                "카탈로그 수집기는 로컬 스크립트 전용이다 (plan §4.8 ⓒ). jsdom이 서버 번들에 들어간다.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;
