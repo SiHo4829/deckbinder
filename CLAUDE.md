@@ -29,10 +29,18 @@ DeckBinder(덱바인더)는 TCG 플레이어와 컬렉터를 위한 종합 서�
    - `src/types/`: TypeScript interface definitions
 
 2. **Core Domain Business Rules:**
-   - **Crawler Restrictions:**
-     - Search MUST be limited to **1 card per query**. Do NOT implement batch scraping for crawler requests.
-     - Enforce intentional delay UI (8–12 seconds Progressive Loading animation) during live search.
-     - Basic filtering must support `All`, `A-Grade/Unopened`, and `PSA/BGS Graded`.
+   - **Crawler Restrictions — two different crawlers, two different rules. Do NOT apply one's rules to the other.**
+     - **(A) Marketplace price crawler** (`workers/crawler`, `market_sessions`, Phase 2 T2.6–T2.11). Fetches live listings from Mercari / Rakuma / Yahoo Auctions on user request.
+       - Search MUST be limited to **1 card per query**. Do NOT implement batch scraping here.
+       - Enforce intentional delay UI (8–12 seconds Progressive Loading animation) during live search.
+       - Basic filtering must support `All`, `A-Grade/Unopened`, and `PSA/BGS Graded`.
+       - **Why:** these are anti-scalping controls, not data-access controls (`.claude/plan.md` §5.4). They stay even if the data path changes.
+     - **(B) Card catalog ingestion** (backlog A-5). Populates our own `cards` table from the source site.
+       - Batch collection is **allowed here** — it is what this task is. Rule (A)'s 1-card limit does NOT apply.
+       - MUST be two stages: **collect → intermediate file**, then **import → DB**. Never write to the DB straight from the network.
+       - The importer MUST support a dry run, and MUST NOT be run without a fresh `npm run db:dump` (`.claude/plan.md` §9.2 ⓑ).
+       - Rate limiting is **our** responsibility: the source's `robots.txt` returns 404, so there is no `Crawl-delay` to follow. Serial requests, concurrency 1, an explicit request cap, and an abort-after-N-failures rule are required before any run. A 404 `robots.txt` means the site said *nothing*, not that it said *yes*.
+       - Source scope is fixed to what `.claude/plan.md` §4.4.1 lists. Do NOT add a source without amending that section first.
    - **Price Representation:**
      - Do NOT display stock/crypto-style price variation charts.
      - Display only **a single benchmark average price** (SNKRDUNK-style baseline).
