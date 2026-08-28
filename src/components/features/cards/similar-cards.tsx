@@ -24,7 +24,7 @@ export function SimilarCards({ cards }: { cards: CardListItem[] }) {
           <li key={card.id}>
             <Link href={`/cards/${card.id}`} className="group block">
               <div className="relative aspect-card overflow-hidden rounded-lg border bg-surface-raised transition-shadow group-hover:shadow-md">
-                <CardImage card={card} iconClassName="size-4" />
+                <CardImage card={card} />
                 {card.rarity ? (
                   <span className="absolute top-1.5 right-1.5 rounded bg-foreground/85 px-1.5 py-0.5 text-[10px] font-medium text-background">
                     {card.rarity}

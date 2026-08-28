@@ -64,7 +64,7 @@ export default async function CardDetailPage(props: PageProps<"/cards/[cardId]">
         <div className="flex flex-col gap-4">
           {/* 이미지가 없는 카드가 기본이라고 보고 그린다 (plan §4.4). */}
           <div className="aspect-card overflow-hidden rounded-xl border bg-surface-raised shadow-sm">
-            <CardImage card={card} showCode iconClassName="size-7" priority />
+            <CardImage card={card} showCode priority />
           </div>
 
           {/* card_prices는 T2.8에 생긴다. 그때까지 항상 "산출 불가"다. */}
