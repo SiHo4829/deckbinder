@@ -174,6 +174,14 @@ Allow: /
 | 이용약관(추정 경로) | <https://onepiece-cardgame.kr/terms.do> | 2026-08-25 | **HTTP 404** |
 | 개인정보처리방침(추정 경로) | <https://onepiece-cardgame.kr/privacy.do> | 2026-08-25 | **HTTP 404** |
 
+> ★ **2026-08-28 재확인 — 여섯 항목 전부 2026-08-25 기록과 일치한다. 변화 없음.**
+> 수집기를 처음 돌리는 날의 첫 단계로 §9 절차를 밟았다(`plan.md` T1.19 완료 기준 ⓐ). 확인한 것:
+> `robots.txt` **404** · `/terms.do` **404** · `/privacy.do` **404** · 홈과 `/rules.do`는 **200이고 정책 링크 없음** ·
+> 여섯 페이지 어디에도 `무단`·`전재`·`복제`·`저작권`·`수집`·`약관`·`개인정보` 어느 단어도 없다 ·
+> 푸터는 아래 인용문과 **문자열 단위로 일치**한다(`card@xosoft.kr` · 저작권 표기 두 줄 포함).
+> **→ `plan.md` §4.4.1 되돌릴 조건 1(약관·저작권 안내가 새로 게시된다)은 발동하지 않았다.**
+> ⚠️ **"변화 없음"은 "허용"이 아니다** — 아래 판정은 그대로 유효하다.
+
 ### 3.2 네 축 모두 — **근거를 찾지 못했다**
 
 **이용약관·개인정보처리방침·저작권 안내 페이지를 찾지 못했다.** 푸터 전문에 정책 링크가 하나도 없다. 확인한 푸터는 다음이 전부다.
@@ -497,8 +505,8 @@ card@xosoft.kr
 |---|------|-----|-------------|
 | 1 | 포켓몬코리아 `robots.txt` | <https://pokemoncard.co.kr/robots.txt> | 2026-08-25 |
 | 1 | 포켓몬코리아 이용약관 | <https://www.pokemonkorea.co.kr/terms> | 2026-08-25 |
-| 2 | 원피스 한국 `robots.txt` | <https://onepiece-cardgame.kr/robots.txt> | 2026-08-25 (404) |
-| 2 | 원피스 한국 푸터 | <https://onepiece-cardgame.kr/cardlist.do> | 2026-08-25 |
+| 2 | 원피스 한국 `robots.txt` | <https://onepiece-cardgame.kr/robots.txt> | **2026-08-28 (404 — 변화 없음)** |
+| 2 | 원피스 한국 푸터 | <https://onepiece-cardgame.kr/cardlist.do> | **2026-08-28 (인용문과 일치)** |
 | 3 | 원피스 일본 `robots.txt` | <https://www.onepiece-cardgame.com/robots.txt> | 2026-08-25 (404) |
 | 3 | 원피스 일본 카드 목록 본문 문구 | <http://www.onepiece-cardgame.com/cardlist/> | 2026-08-25 |
 | 3 | 반다이 ウェブサイトご利用条件 | <https://www.bandai.co.jp/site/notice/> | 2026-08-25 |
