@@ -18,6 +18,20 @@ import type { CollectedCard } from "./types";
 /** 원천 마크업 대응 버전. 셀렉터를 고치면 올린다. */
 export const PARSER_VERSION = "1";
 
+/**
+ * `【프로모션】` 옵션에 도달하기 위한 **예약 코드**(§4.10 ⓔ).
+ *
+ * 원천의 값이 아니라 「그 자리에 들어가는 우리 쪽 코드」다 — 라벨 원문을 셸
+ * 인자로 받는 경로는 만들지 않는다(Git Bash가 한국어 인자를 망가뜨린 전례가
+ * 있다, §4.8 ⓙ).
+ *
+ * 🚨 이 파일(`parse.ts`, HTML 해석)이 소유한다. `resolveSetLabel`이 이 값의
+ * 실제 소비자이고, `series.ts`(계열 오케스트레이션)는 여기서 가져다 쓴다 —
+ * 반대 방향(낮은 층위가 높은 층위를 import)으로 두면 다음에 `parse.ts`가
+ * `series.ts`의 다른 것을 더 끌어오기 시작하는 길을 연다(reviewer 발견 4).
+ */
+export const PROMO_SET_CODE = "PROMO";
+
 export interface SetOption {
   readonly value: string;
   readonly label: string;
@@ -158,10 +172,23 @@ export function assertNonEmpty(parsed: ParsedPage, page: number, expected: numbe
   return null;
 }
 
-/** 셀렉터 옵션에서 세트 코드로 라벨을 해석한다. 0개·2개 이상이면 throw. */
+/**
+ * 셀렉터 옵션에서 세트 코드로 라벨을 해석한다. 0개·2개 이상이면 throw.
+ *
+ * 🚨 **예약 코드 `PROMO`** — `【프로모션】` 옵션에는 대괄호 코드가 없어
+ * 접두사 매칭으로는 40개 중 39개만 도달한다(plan §4.10 ⓔ · T1.24 ⓚ-1).
+ * `PROMO`는 **`all`이 아니고 `[`로 시작하지 않는 옵션**으로 해석한다.
+ *
+ * ⚠️ **`"【프로모션】"`을 상수로 박지 않는다.** 원천이 문구를 바꾸는 날
+ * 조용히 다른 세트를 받는 대신 `set_not_found`로 던지게 한다. 그리고 대괄호
+ * 없는 옵션이 **2개가 되면** 「프로모 말고 또 생겼다」는 뜻이라 사람이 봐야
+ * 하는 사건이다 — 근거는 셀렉터 옵션 **41개 전량 관측**이다(§4.8 ⓙ-10).
+ */
 export function resolveSetLabel(options: readonly SetOption[], setCode: string): string {
-  const prefix = `[${setCode}]`;
-  const matches = options.filter((o) => o.value.startsWith(prefix));
+  const matches =
+    setCode === PROMO_SET_CODE
+      ? options.filter((o) => o.value !== "all" && !o.value.startsWith("["))
+      : options.filter((o) => o.value.startsWith(`[${setCode}]`));
   if (matches.length === 0) {
     throw new Error(`setCode "${setCode}"에 해당하는 셀렉터 옵션이 없다.`);
   }

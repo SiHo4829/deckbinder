@@ -79,3 +79,64 @@ export interface CollectRun {
   readonly outFileSha256: string; // ★ ⓕ 관문 3의 --from-report가 대조할 값의 원천
   readonly stoppedBy: CollectStopReason;
 }
+
+// ─── 계열 단위 실행 (T1.24 · plan §4.10) ───────────────────────────────────
+// 🚨 가산만 한다. 위의 `CollectRun`·`CollectRequestLog`는 T1.16이 고정한
+// 계약이고 계열 확장이 그 의미를 바꾸지 않는다(§4.10 ⓗ).
+
+/**
+ * 계열 실행에서 세트 하나가 놓이는 자리.
+ *
+ * - `pending` 아직 차례가 오지 않았다 (실행 중에만 존재)
+ * - `skipped_complete` 이미 전 페이지를 받아 **요청 0회로** 건너뛰었다
+ * - `done` 이번 실행에서 완주했다
+ * - `partial` 받다가 예산·규율에 걸려 끊겼다. 다음 실행이 이어받는다
+ * - `failed` 이 세트 때문에 계열이 멈췄다 (ⓘ-2)
+ * - `not_started` 계열이 먼저 멈춰 **한 번도 시도되지 않았다**
+ *
+ * 🚨 `partial`과 `not_started`를 가르는 것이 이 타입의 요점이다 — 둘을 섞으면
+ * 「어디까지 받았는가」가 기록에서 사라진다.
+ */
+export type SeriesSetStatus =
+  | "pending"
+  | "skipped_complete"
+  | "done"
+  | "partial"
+  | "failed"
+  | "not_started";
+
+/** 계열 매니페스트가 세트 하나에 대해 남기는 것. **요청 전량은 담지 않는다.** */
+export interface SeriesSetOutcome {
+  readonly setCode: string;
+  readonly status: SeriesSetStatus;
+  /** 세트 매니페스트 **파일명**. 요약이 원본을 대신하지 않게 가리키기만 한다(§4.10 ⓓ). */
+  readonly manifestFile: string | null;
+  readonly rowCount: number;
+  readonly stoppedBy: CollectStopReason | null;
+}
+
+/**
+ * 계열 매니페스트 — `data/catalog/<game>/_runs/series-<stamp>.json` (T1.24 ⓜ).
+ *
+ * 🚨 **승인 단위와 감사 단위를 맞추는 것이 존재 이유다.** 승인은 계열 단위
+ * (`--sets` + `--max-requests` 한 쌍)로 이뤄지는데 기록이 세트 단위밖에 없으면
+ * 나중에 「이게 한 번의 승인이었는지 39번이었는지」를 추론하게 된다(§4.10 ⓓ).
+ */
+export interface SeriesRun {
+  readonly schemaVersion: 1;
+  readonly game: string;
+  /** 사람이 실제로 친 인자 원문. 이것이 승인의 사본이다. */
+  readonly argv: readonly string[];
+  /** 대상 세트 목록 — **입력 순서 그대로**(ⓕ). */
+  readonly targetSets: readonly string[];
+  readonly startedAt: string;
+  readonly finishedAt: string;
+  readonly sets: readonly SeriesSetOutcome[];
+  /** 상한에 세는 시도 수. robots는 여기 들어가지 않는다. */
+  readonly requestCount: number;
+  readonly maxRequests: number;
+  /** 🚨 상한 **밖** robots 요청 수. 총 트래픽이 늘어난 것을 숨기지 않는다(§4.10 ⓑ). */
+  readonly robotsChecks: number;
+  readonly notStarted: readonly string[];
+  readonly stoppedBy: CollectStopReason;
+}

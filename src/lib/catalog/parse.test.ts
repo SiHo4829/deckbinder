@@ -178,8 +178,35 @@ describe("parseCardListPage", () => {
       ];
       expect(() => resolveSetLabel(options, "TST-01")).toThrow();
     });
-  });
 
+    // 예약 코드 PROMO — plan §4.10 ⓔ · T1.24 ⓚ-1. 대괄호 코드가 없는
+    // 옵션(원천에서는 「【프로모션】」)에 도달하는 유일한 경로다.
+    it("16a. PROMO → all이 아니고 [로 시작하지 않는 옵션이 정확히 1개면 그 값", () => {
+      const options = [
+        { value: "all", label: "전체" },
+        { value: "[TST-01] 세트 A", label: "세트 A" },
+        { value: "【프로모션】", label: "【프로모션】" },
+      ];
+      expect(resolveSetLabel(options, "PROMO")).toBe("【프로모션】");
+    });
+
+    it("16b. PROMO 후보가 0개 → throw (조용히 다른 세트를 받지 않는다)", () => {
+      const options = [
+        { value: "all", label: "전체" },
+        { value: "[TST-01] 세트 A", label: "세트 A" },
+      ];
+      expect(() => resolveSetLabel(options, "PROMO")).toThrow();
+    });
+
+    it("16c. 🚨 PROMO 후보가 2개 이상 → throw. 사람이 봐야 하는 사건이다", () => {
+      const options = [
+        { value: "all", label: "전체" },
+        { value: "【프로모션】", label: "【프로모션】" },
+        { value: "【이벤트】", label: "【이벤트】" },
+      ];
+      expect(() => resolveSetLabel(options, "PROMO")).toThrow();
+    });
+  });
   // 백로그 E-3 — jsdom이 흘리던 CSS 파싱 잡음 억제. 저장본으로 재현하고
   // 네트워크는 쓰지 않는다(E-3 ⓓ).
   describe("가상 콘솔 (E-3)", () => {

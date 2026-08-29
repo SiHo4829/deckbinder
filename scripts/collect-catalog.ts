@@ -1,15 +1,22 @@
 /**
- * 카드 카탈로그 수집기 진입점 — T1.16 (plan §4.8 ⓚ-5).
+ * 카드 카탈로그 수집기 진입점 — T1.16 + **T1.24 계열 확장** (plan §4.8 ⓚ-5 · §4.10).
  *
  * 인자 파싱 · fetch · 파일 I/O · 잠들기 · 매니페스트 쓰기만 한다.
- * **판단하지 않는다** — 멈출지 말지는 `src/lib/catalog/pace.ts`에 묻고,
- * 마크업 해석은 `src/lib/catalog/parse.ts`에 맡긴다.
+ * **판단하지 않는다** — 멈출지 말지는 `src/lib/catalog/pace.ts`에, 다음에 어느
+ * 세트를 볼지·무엇을 건너뛸지·무엇을 실패로 셀지는 `src/lib/catalog/series.ts`에
+ * 묻고, 마크업 해석은 `src/lib/catalog/parse.ts`에 맡긴다.
  *
- * 실행: npm run catalog:collect -- --game <code> --set <OPK-14> --max-requests <n>
+ * 실행:
+ *   단일  npm run catalog:collect -- --game opcg --set OPK-14 --max-requests 12
+ *   계열  npm run catalog:collect -- --game opcg --sets OPK-01,…,OPK-14 --max-requests 120
+ *
+ * 🚨 **`--max-requests`는 계열 전체의 총 상한이다. 세트당 상한이 아니다**
+ * (§4.10 ⓐ). 세트당으로 두면 사람이 승인한 숫자와 상대가 받는 요청 수가
+ * 세트 수만큼 달라지고, 그것이 T1.16 결함 1과 같은 형태의 사고다.
  *
  * 🚨 이 파일은 `vitest`의 `include`(`src/**\/*.{test,spec}.{ts,tsx}`)가
  * 닿지 않는다 — 판단이 들어가는 로직은 전부 `src/lib/catalog/`로 올렸다
- * (plan §4.8 ⓒ). 여기 남은 것은 배선뿐이다.
+ * (plan §4.8 ⓒ · §4.10 ⓖ). 여기 남은 것은 배선뿐이다.
  */
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
@@ -24,7 +31,11 @@ import {
   resolveSetLabel,
   type SetOption,
 } from "@/lib/catalog/parse";
-import { latestManifestFilename, recoverFromManifest } from "@/lib/catalog/manifest";
+import {
+  latestManifestFilename,
+  recoverFromManifest,
+  type ManifestRecovery,
+} from "@/lib/catalog/manifest";
 import {
   canAfford,
   createPaceState,
@@ -36,17 +47,38 @@ import {
   shouldContinue,
   type PaceState,
 } from "@/lib/catalog/pace";
+import {
+  assertRefetchAllowed,
+  buildSeriesPlan,
+  buildSeriesRun,
+  classifySetOutcome,
+  createSeriesProgress,
+  finalizeSeries,
+  formatSeriesPlan,
+  formatSeriesSummary,
+  haltSeries,
+  isSetComplete,
+  markRobotsCheck,
+  markSet,
+  nextStep,
+  parseSetCodes,
+  type SeriesProgress,
+} from "@/lib/catalog/series";
 import { CATALOG_ORIGIN } from "@/lib/validation/catalog";
 
-/** 관측값. 임의로 키우지 않는다 — `--size` 인자를 만들지 않는다(plan §4.8 ⓔ). */
+/** 관측값. 임의로 키우지 않는다 — `--size` 인자를 만들지 않는다(plan §4.8 ⓔ · T1.24 ⓖ-6). */
 const PAGE_SIZE = 20;
 
 /** 3초 미만이면 거부한다 — 인자가 규율을 깎는 통로가 되지 않게(ⓚ-5). */
 const MIN_DELAY_MS = 3000;
 
+/** robots.txt가 404가 아니면 원천이 처음으로 말을 한 것이다(plan §4.8 ⓔ). */
+const ROBOTS_OK_STATUS = 404;
+
 interface Args {
   readonly game: string;
-  readonly set: string;
+  /** 대상 세트 — **입력 순서 그대로**. 단일 실행은 길이 1이다(§4.10 ⓕ). */
+  readonly sets: readonly string[];
   readonly maxRequests: number;
   readonly delayMs: number;
   readonly jitterMs: number;
@@ -66,6 +98,7 @@ function readArgValue(argv: readonly string[], name: string): string | undefined
 function parseArgs(argv: readonly string[]): Args {
   const game = readArgValue(argv, "--game");
   const set = readArgValue(argv, "--set");
+  const sets = readArgValue(argv, "--sets");
   const maxRequestsRaw = readArgValue(argv, "--max-requests");
   const delayMsRaw = readArgValue(argv, "--delay-ms");
   const jitterMsRaw = readArgValue(argv, "--jitter-ms");
@@ -76,9 +109,18 @@ function parseArgs(argv: readonly string[]): Args {
   if (!game) {
     throw new Error("--game이 필요하다.");
   }
-  if (!set) {
-    throw new Error("--set이 필요하다.");
+  // 대상 지정은 **한 자리**여야 한다 — 둘이 공존하면 「어느 것이 이겼는가」라는
+  // 상태가 생기고, 그것이 §4.10 ⓔ가 `--promo`를 기각한 이유와 같은 형태다.
+  if (set && sets) {
+    throw new Error("--set과 --sets를 함께 쓰지 않는다. 대상 지정은 한 자리다.");
   }
+  if (!set && !sets) {
+    throw new Error("--set 또는 --sets가 필요하다.");
+  }
+  // 🚨 접두사 확장(`--series OPK`)을 만들지 않는다 — 원천이 OPK-15를 추가하는
+  // 날 같은 명령이 다른 범위를 수집한다(§4.10 ⓒ · T1.24 ⓓ).
+  const setCodes = parseSetCodes(sets ?? (set as string));
+
   // 🚨 기본값을 두지 않는다 — 없으면 시작을 거부한다(plan §4.8 ⓔ).
   if (!maxRequestsRaw) {
     throw new Error("--max-requests가 필요하다. 기본값은 없다 — 수집 범위는 사람이 승인한다(plan §4.8 ⓔ).");
@@ -98,7 +140,9 @@ function parseArgs(argv: readonly string[]): Args {
     throw new Error("--jitter-ms는 0 이상이어야 한다.");
   }
 
-  return { game, set, maxRequests, delayMs, jitterMs, refetch, contact, outDir };
+  assertRefetchAllowed(setCodes, refetch);
+
+  return { game, sets: setCodes, maxRequests, delayMs, jitterMs, refetch, contact, outDir };
 }
 
 function userAgentFor(contact: string | null): string {
@@ -227,40 +271,102 @@ function readExistingPages(jsonlPath: string): Set<number> {
  * I/O(파일 목록 읽기 · JSON 파싱)만 한다 — 「최신인가 · 유효한가」의 판단은
  * `src/lib/catalog/manifest.ts`에 있다(리뷰 결함 2).
  */
-function recoverLastPageIndexFromManifest(setDir: string): { found: boolean; lastPageIndex: number | null } {
+function recoverLastPageIndexFromManifest(setDir: string): ManifestRecovery {
   let filenames: string[];
   try {
     filenames = readdirSync(setDir);
   } catch {
-    return { found: false, lastPageIndex: null };
+    return { found: false };
   }
   const latest = latestManifestFilename(filenames);
   if (latest === null) {
-    return { found: false, lastPageIndex: null };
+    return { found: false };
   }
   try {
     const parsed: unknown = JSON.parse(readFileSync(join(setDir, latest), "utf-8"));
-    const recovery = recoverFromManifest(parsed);
-    return recovery.found ? { found: true, lastPageIndex: recovery.lastPageIndex } : { found: false, lastPageIndex: null };
+    return recoverFromManifest(parsed);
   } catch {
-    return { found: false, lastPageIndex: null };
+    return { found: false };
   }
 }
 
-async function writeManifest(run: CollectRun, dir: string, stamp: string): Promise<void> {
-  const manifestPath = join(dir, `manifest-${stamp}.json`);
-  writeFileSync(manifestPath, JSON.stringify(run, null, 2), "utf-8");
-  console.log(`매니페스트: ${manifestPath}`);
+/**
+ * 세트 하나의 로컬 상태를 요청 0회로 읽는다 — 계획 출력(ⓔ)과 건너뛰기
+ * 판정(ⓘ-1) 둘 다 이것을 쓴다. **판단하지 않는다**: 「완주했는가」는
+ * `series.isSetComplete`가 정한다.
+ */
+interface LocalSetState {
+  readonly existingPages: Set<number>;
+  readonly recovery: ManifestRecovery;
+  /** JSONL의 실제 행 수. **페이지 수가 아니다** — 매니페스트에 그대로 실린다. */
+  readonly rowCount: number;
 }
 
-async function main(): Promise<void> {
-  const startedAt = new Date();
-  const args = parseArgs(process.argv.slice(2));
-  const userAgent = userAgentFor(args.contact);
-  const stamp = stampUtc(startedAt);
-  const requests: CollectRequestLog[] = [];
+function inspectSetLocally(setDir: string, refetch: boolean): LocalSetState {
+  if (refetch) {
+    // 다시 받기로 한 세트는 로컬 상태를 없는 것으로 본다 — 아래에서 JSONL을
+    // 백업으로 밀어내기 때문이다.
+    return { existingPages: new Set<number>(), recovery: { found: false }, rowCount: 0 };
+  }
+  const jsonlPath = join(setDir, "cards.jsonl");
+  return {
+    existingPages: readExistingPages(jsonlPath),
+    recovery: recoverLastPageIndexFromManifest(setDir),
+    rowCount: countJsonlRows(jsonlPath),
+  };
+}
 
-  const setDir = join(args.outDir, "catalog", args.game, args.set);
+/** JSONL 행 수. 건너뛴 세트의 `rowCount`가 페이지 수로 잘못 기록되지 않게 한다. */
+function countJsonlRows(jsonlPath: string): number {
+  if (!existsSync(jsonlPath)) {
+    return 0;
+  }
+  return readFileSync(jsonlPath, "utf-8")
+    .split(/\r?\n/)
+    .filter((line) => line.trim() !== "").length;
+}
+
+function writeManifest(run: CollectRun, dir: string, stamp: string): string {
+  const filename = `manifest-${stamp}.json`;
+  const manifestPath = join(dir, filename);
+  writeFileSync(manifestPath, JSON.stringify(run, null, 2), "utf-8");
+  console.log(`매니페스트: ${manifestPath}`);
+  return filename;
+}
+
+// ─── 세트 하나 수집 ────────────────────────────────────────────────────────
+
+interface CollectSetParams {
+  readonly args: Args;
+  readonly setCode: string;
+  readonly userAgent: string;
+  readonly stamp: string;
+  readonly startedAt: Date;
+  readonly pace: PaceState;
+  readonly robotsStatus: number;
+  readonly selectorOptions: readonly SetOption[];
+  /** 이 세트의 매니페스트에 함께 실을, 세트 전에 보낸 요청들(초기 robots · 셀렉터 · 경계 robots). */
+  readonly carriedRequests: readonly CollectRequestLog[];
+}
+
+interface CollectSetResult {
+  readonly stoppedBy: CollectStopReason;
+  readonly rowCount: number;
+  readonly manifestFile: string;
+  readonly pace: PaceState;
+}
+
+/**
+ * 세트 하나를 받는다. T1.16이 확정한 실행 순서 그대로다 — 계열 확장이
+ * 바꾼 것은 **이 함수를 몇 번 부르는가와 `pace`를 누가 소유하는가**뿐이다
+ * (`PaceState`는 프로세스당 1개 · §4.10 ⓐ · T1.24 ⓑ).
+ */
+async function collectSet(params: CollectSetParams): Promise<CollectSetResult> {
+  const { args, setCode, userAgent, stamp, startedAt, selectorOptions, robotsStatus } = params;
+  let pace = params.pace;
+  const requests: CollectRequestLog[] = [...params.carriedRequests];
+
+  const setDir = join(args.outDir, "catalog", args.game, setCode);
   mkdirSync(setDir, { recursive: true });
   const jsonlPath = join(setDir, "cards.jsonl");
 
@@ -268,10 +374,12 @@ async function main(): Promise<void> {
     renameSync(jsonlPath, `${jsonlPath}.bak-${stamp}`);
   }
 
-  const finish = async (
+  let rowCount = 0;
+
+  const finish = (
     stoppedBy: CollectStopReason,
-    extra: { robotsStatus: number; sourceSetLabel: string; lastPageIndex: number | null; rowCount: number },
-  ): Promise<number> => {
+    extra: { sourceSetLabel: string; lastPageIndex: number | null },
+  ): CollectSetResult => {
     const outFileText = existsSync(jsonlPath) ? readFileSync(jsonlPath, "utf-8") : "";
     const robotsUrlString = catalogUrl("/robots.txt").toString();
     const collectRequests = requests.filter((r) => r.url !== robotsUrlString);
@@ -279,13 +387,13 @@ async function main(): Promise<void> {
       schemaVersion: 1,
       parserVersion: PARSER_VERSION,
       game: args.game,
-      sourceSetCode: args.set,
+      sourceSetCode: setCode,
       sourceSetLabel: extra.sourceSetLabel,
       host: catalogUrl("/").host,
       userAgent,
       startedAt: startedAt.toISOString(),
       finishedAt: new Date().toISOString(),
-      robots: { url: catalogUrl("/robots.txt").toString(), status: extra.robotsStatus, checkedAt: startedAt.toISOString() },
+      robots: { url: robotsUrlString, status: robotsStatus, checkedAt: startedAt.toISOString() },
       pageSize: PAGE_SIZE,
       lastPageIndex: extra.lastPageIndex,
       requests,
@@ -296,85 +404,24 @@ async function main(): Promise<void> {
       requestCount: collectRequests.length,
       maxRequests: args.maxRequests,
       failureCount: collectRequests.filter((r) => r.status === null || r.status >= 400).length,
-      rowCount: extra.rowCount,
+      rowCount,
       outFile: jsonlPath,
       outFileSha256: sha256Of(outFileText),
       stoppedBy,
     };
-    await writeManifest(run, setDir, stamp);
-    const ok = stoppedBy === "completed" || stoppedBy === "max_requests";
-    return ok ? 0 : 1;
+    const manifestFile = writeManifest(run, setDir, stamp);
+    return { stoppedBy, rowCount, manifestFile, pace };
   };
 
-  // 1. robots.txt 사전 확인 — 상한에 세지 않는다. 상태 코드로만 판정한다(본문을 보지 않는다).
-  const robotsUrl = catalogUrl("/robots.txt");
-  const robotsStart = new Date().toISOString();
-  const robots = await fetchOnce(robotsUrl, userAgent);
-  requests.push({
-    url: robotsUrl.toString(),
-    startedAt: robotsStart,
-    status: robots.status,
-    durationMs: robots.durationMs,
-    rows: null,
-    attempt: 1,
-  });
-  if (robots.status !== 404) {
-    console.error(`robots.txt가 404가 아니다 (status=${robots.status ?? "network error"}). 사람이 읽는다 — 중단.`);
-    process.exitCode = await finish("robots_changed", {
-      robotsStatus: robots.status ?? -1,
-      sourceSetLabel: "",
-      lastPageIndex: null,
-      rowCount: 0,
-    });
-    return;
-  }
-
-  let pace: PaceState = createPaceState({ maxRequests: args.maxRequests, robotsStatus: robots.status });
-
-  // 결함 3 — robots.txt 직후에도 사람이 브라우저로 훑는 것보다 빠르게 다음
-  // 요청(셀렉터)을 보내지 않는다. §4.8 ⓔ의 「요청 간격」은 단계를 한정하지
-  // 않는다 — 연속한 모든 요청 쌍 사이에 지연을 넣는다(첫 요청 앞은 예외).
-  await sleep(nextDelayMs(args.delayMs, args.jitterMs));
-
-  // 2. 셀렉터 해석 요청 1회. 이 응답의 카드 행은 버린다 — 우리가 요청한 세트가 아니다.
-  const selectorUrl = catalogUrl(
-    `/cardlist.do?page=0&size=${PAGE_SIZE}&freewords=&categories=&illustrations=&colors=&blockIcons=&series=`,
-  );
-  const selectorFetch = await fetchWithRetry(selectorUrl, userAgent, requests, () => null, pace);
-  pace = selectorFetch.pace;
-  const selectorAttempt = selectorFetch.result;
-  pace = registerUrlOutcome(pace, { ok: selectorAttempt.status === 200 });
-  let selectorOptions: readonly SetOption[] = [];
-  if (selectorAttempt.status === 200) {
-    selectorOptions = parseCardListPage(selectorAttempt.text, 0).setOptions;
-  }
-
-  let sourceSetLabel = "";
-  {
-    const decision = shouldContinue(pace);
-    if (decision.stop) {
-      process.exitCode = await finish(decision.reason ?? "consecutive_failures", {
-        robotsStatus: robots.status,
-        sourceSetLabel,
-        lastPageIndex: null,
-        rowCount: 0,
-      });
-      return;
-    }
-    try {
-      sourceSetLabel = resolveSetLabel(selectorOptions, args.set);
-    } catch (err) {
-      console.error(err instanceof Error ? err.message : String(err));
-      // 결함 4 — 라벨 해석 실패는 네트워크 연속 실패가 아니다. 인자·원천
-      // 불일치이므로 별도 사유로 갈랐다(오분류는 사후 감사를 흐린다, §4.8 ⓓ).
-      process.exitCode = await finish("set_not_found", {
-        robotsStatus: robots.status,
-        sourceSetLabel: "",
-        lastPageIndex: null,
-        rowCount: 0,
-      });
-      return;
-    }
+  // 라벨 해석 — 셀렉터 응답은 계열당 1회만 받고 프로세스 안에서만 캐시한다(ⓗ).
+  let sourceSetLabel: string;
+  try {
+    sourceSetLabel = resolveSetLabel(selectorOptions, setCode);
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    // 결함 4 — 라벨 해석 실패는 네트워크 연속 실패가 아니다. 인자·원천
+    // 불일치이므로 별도 사유로 갈랐다(오분류는 사후 감사를 흐린다, §4.8 ⓓ).
+    return finish("set_not_found", { sourceSetLabel: "", lastPageIndex: null });
   }
 
   const seriesParam = encodeURIComponent(sourceSetLabel);
@@ -389,7 +436,6 @@ async function main(): Promise<void> {
   // 표현할 수 없다. null이 「알아냈고 1페이지짜리다」인지 「아직 모른다」인지
   // 갈라지지 않으면 완주한 1페이지 세트도 미완주와 구분되지 않는다.
   let pageZeroResolved = false;
-  let rowCount = 0;
 
   const appendRows = async (rows: readonly CollectedCard[]): Promise<void> => {
     if (rows.length === 0) return;
@@ -398,9 +444,9 @@ async function main(): Promise<void> {
     rowCount += rows.length;
   };
 
-  // 3. page=0 확정 — 이미 받았으면 매니페스트의 lastPageIndex를 쓴다(재실행
-  //    복구, plan 1999행). 매니페스트가 없거나 못 믿으면 page=0을 한 번 다시
-  //    받는다 — 규율 위반이 아니라 기록을 잃었을 때의 허용된 복구 비용이다.
+  // page=0 확정 — 이미 받았으면 매니페스트의 lastPageIndex를 쓴다(재실행
+  // 복구). 매니페스트가 없거나 못 믿으면 page=0을 한 번 다시 받는다 —
+  // 규율 위반이 아니라 기록을 잃었을 때의 허용된 복구 비용이다.
   if (existingPages.has(0)) {
     const recovered = recoverLastPageIndexFromManifest(setDir);
     if (recovered.found) {
@@ -412,16 +458,12 @@ async function main(): Promise<void> {
   if (!pageZeroResolved) {
     const decision = shouldContinue(pace);
     if (decision.stop || !canAfford(pace)) {
-      process.exitCode = await finish(decision.reason ?? "max_requests", {
-        robotsStatus: robots.status,
-        sourceSetLabel,
-        lastPageIndex: null,
-        rowCount,
-      });
-      return;
+      return finish(decision.reason ?? "max_requests", { sourceSetLabel, lastPageIndex: null });
     }
 
-    await sleep(nextDelayMs(args.delayMs, args.jitterMs)); // 결함 3 — 셀렉터 → page=0 사이 지연.
+    // 결함 3 — 연속한 모든 요청 쌍 사이에 지연을 넣는다. §4.8 ⓔ의 「요청
+    // 간격」은 단계를 한정하지 않고, 세트 경계도 예외가 아니다(T1.24 ⓖ-4).
+    await sleep(nextDelayMs(args.delayMs, args.jitterMs));
 
     const page0Fetch = await fetchWithRetry(
       pageUrl(0),
@@ -457,39 +499,31 @@ async function main(): Promise<void> {
 
   const decisionAfterPage0 = shouldContinue(pace);
   if (decisionAfterPage0.stop) {
-    process.exitCode = await finish(decisionAfterPage0.reason ?? "max_requests", {
-      robotsStatus: robots.status,
+    return finish(decisionAfterPage0.reason ?? "max_requests", {
       sourceSetLabel,
       lastPageIndex: pageZeroResolved ? lastPageIndex : null,
-      rowCount,
     });
-    return;
   }
 
   // 결함 2 — 어떤 경로로도(직접 요청도, 매니페스트 복구도) page=0을
   // 확정하지 못한 채 "completed"로 조용히 끝나지 않는다. 그 상태는 실패다.
+  // 🚨 계열에서는 여기가 계열 전체를 멈추는 자리가 된다(§4.10 ⓓ · T1.24 ⓘ-2).
   if (!pageZeroResolved) {
-    process.exitCode = await finish("page_zero_unavailable", {
-      robotsStatus: robots.status,
-      sourceSetLabel,
-      lastPageIndex: null,
-      rowCount,
-    });
-    return;
+    return finish("page_zero_unavailable", { sourceSetLabel, lastPageIndex: null });
   }
 
   if (lastPageIndex !== null) {
-    const totalNeeded = 1 + lastPageIndex + 1; // 셀렉터 1 + page 0..last
-    if (totalNeeded > args.maxRequests) {
+    const remainingNeeded = lastPageIndex + 1 - existingPages.size;
+    if (remainingNeeded > 0 && !canAfford(pace, remainingNeeded)) {
       console.warn(
-        `경고: 세트 전체를 받으려면 요청 ${totalNeeded}회가 필요한데 상한이 ${args.maxRequests}다. ` +
-          "상한까지만 받고 나머지는 다음 실행이 이어받는다.",
+        `경고: [${setCode}] 전체를 받으려면 요청 ${remainingNeeded}회가 더 필요한데 예산이 ` +
+          `${pace.maxRequests - pace.requestCount}회 남았다. 상한까지만 받고 나머지는 다음 실행이 이어받는다.`,
       );
     }
   }
 
-  // 4. page=1..last 순회. lastPageIndex === null은 1페이지짜리 세트로
-  //    확정된 상태다(pageZeroResolved === true) — 완주로 끝난다.
+  // page=1..last 순회. lastPageIndex === null은 1페이지짜리 세트로
+  // 확정된 상태다(pageZeroResolved === true) — 완주로 끝난다.
   let stoppedBy: CollectStopReason = "completed";
   if (lastPageIndex !== null) {
     for (let page = 1; page <= lastPageIndex; page += 1) {
@@ -536,7 +570,235 @@ async function main(): Promise<void> {
     }
   }
 
-  process.exitCode = await finish(stoppedBy, { robotsStatus: robots.status, sourceSetLabel, lastPageIndex, rowCount });
+  return finish(stoppedBy, { sourceSetLabel, lastPageIndex });
+}
+
+// ─── 계열 실행 ─────────────────────────────────────────────────────────────
+
+/** robots.txt 1회. **상한에 세지 않는다** — 규율을 지키려는 요청이다(§4.10 ⓑ). */
+async function fetchRobots(
+  userAgent: string,
+  requests: CollectRequestLog[],
+): Promise<FetchAttempt> {
+  const robotsUrl = catalogUrl("/robots.txt");
+  const startedAt = new Date().toISOString();
+  const robots = await fetchOnce(robotsUrl, userAgent);
+  requests.push({
+    url: robotsUrl.toString(),
+    startedAt,
+    status: robots.status,
+    durationMs: robots.durationMs,
+    rows: null,
+    attempt: 1,
+  });
+  return robots;
+}
+
+function writeSeriesManifest(
+  args: Args,
+  progress: SeriesProgress,
+  pace: PaceState,
+  stoppedBy: CollectStopReason,
+  startedAt: Date,
+  stamp: string,
+): void {
+  const run = buildSeriesRun({
+    game: args.game,
+    argv: process.argv.slice(2),
+    progress,
+    pace,
+    startedAt: startedAt.toISOString(),
+    finishedAt: new Date().toISOString(),
+    stoppedBy,
+  });
+  const runsDir = join(args.outDir, "catalog", args.game, "_runs");
+  mkdirSync(runsDir, { recursive: true });
+  const path = join(runsDir, `series-${stamp}.json`);
+  writeFileSync(path, JSON.stringify(run, null, 2), "utf-8");
+  console.log(`계열 매니페스트: ${path}`);
+}
+
+async function main(): Promise<void> {
+  const startedAt = new Date();
+  const args = parseArgs(process.argv.slice(2));
+  const userAgent = userAgentFor(args.contact);
+  const stamp = stampUtc(startedAt);
+
+  // 1. 🚨 첫 네트워크 요청 **전에** 계획을 낸다 — 요청 0회로(T1.24 ⓔ).
+  //    별도 승인 관문은 만들지 않는다. 승인이 코드에 들어오는 자리는
+  //    --max-requests 하나뿐이다(§4.10 ⓒ).
+  const localState = new Map(
+    args.sets.map((setCode) => [
+      setCode,
+      inspectSetLocally(join(args.outDir, "catalog", args.game, setCode), args.refetch),
+    ]),
+  );
+  const completed = args.sets.filter((setCode) => {
+    const state = localState.get(setCode);
+    return state !== undefined && isSetComplete(state.existingPages, state.recovery);
+  });
+  const knownLastPageIndex = new Map<string, number | null>();
+  for (const [setCode, state] of localState) {
+    if (state.recovery.found) {
+      knownLastPageIndex.set(setCode, state.recovery.lastPageIndex);
+    }
+  }
+  console.log(
+    formatSeriesPlan(
+      buildSeriesPlan({
+        setCodes: args.sets,
+        completed,
+        maxRequests: args.maxRequests,
+        knownLastPageIndex,
+        delayMs: args.delayMs,
+        jitterMs: args.jitterMs,
+      }),
+      args.maxRequests,
+    ),
+  );
+  console.log("");
+
+  let progress = createSeriesProgress(args.sets);
+
+  // 🚨 받을 것이 하나도 없으면 **요청을 0회 보내고 끝낸다.** robots도 셀렉터도
+  //    받지 않는다 — 「한 번 받은 것을 다시 받지 않는다」(§0.1 ⓓ ⓒ)는 목록
+  //    페이지에만 걸리는 규율이 아니다.
+  if (completed.length === args.sets.length) {
+    for (const setCode of args.sets) {
+      progress = markSet(progress, setCode, {
+        status: "skipped_complete",
+        rowCount: localState.get(setCode)?.rowCount ?? 0,
+        manifestFile: null,
+      });
+    }
+    progress = finalizeSeries(progress);
+    const idlePace = createPaceState({ maxRequests: args.maxRequests, robotsStatus: ROBOTS_OK_STATUS });
+    writeSeriesManifest(args, progress, idlePace, "completed", startedAt, stamp);
+    console.log("대상 세트가 전부 이미 완주 상태다 — 네트워크 요청 0회로 끝낸다.");
+    console.log(formatSeriesSummary(progress, "completed"));
+    return;
+  }
+
+  // 2. robots.txt 사전 확인 — 상태 코드로만 판정한다(본문을 보지 않는다).
+  const sharedRequests: CollectRequestLog[] = [];
+  const robots = await fetchRobots(userAgent, sharedRequests);
+  // 실행 시작 확인도 「상한 밖 robots 요청」이다. 세지 않으면 매니페스트의
+  // 숫자가 계획이 낸 숫자보다 하나 작아지고, 그 어긋남이 §4.10 ⓑ가 「숨기지
+  // 않는다」고 적은 값을 흐린다.
+  progress = markRobotsCheck(progress);
+  let robotsStatus = robots.status ?? -1;
+  if (robots.status !== ROBOTS_OK_STATUS) {
+    console.error(`robots.txt가 404가 아니다 (status=${robots.status ?? "network error"}). 사람이 읽는다 — 중단.`);
+    progress = finalizeSeries(haltSeries(progress, "robots_changed"));
+    const pace = createPaceState({ maxRequests: args.maxRequests, robotsStatus });
+    writeSeriesManifest(args, progress, pace, "robots_changed", startedAt, stamp);
+    console.log(formatSeriesSummary(progress, "robots_changed"));
+    process.exitCode = 1;
+    return;
+  }
+
+  // 🚨 PaceState는 프로세스당 정확히 1개다(§4.10 ⓐ · T1.24 ⓑ). 세트마다 새로
+  //    만들면 연속 실패 카운터가 세트 경계에서 리셋되고, 상한이 세트 수만큼
+  //    곱해진다 — ⓐ가 기각한 그 곱셈이다.
+  let pace: PaceState = createPaceState({ maxRequests: args.maxRequests, robotsStatus });
+
+  // 결함 3 — robots.txt 직후에도 다음 요청(셀렉터)을 바로 보내지 않는다.
+  await sleep(nextDelayMs(args.delayMs, args.jitterMs));
+
+  // 3. 셀렉터 해석 요청 — **계열당 1회.** 프로세스 안에서만 캐시하고 파일로
+  //    저장하지 않는다(T1.24 ⓗ). 이 응답의 카드 행은 버린다 — 우리가 요청한
+  //    세트가 아니다.
+  const selectorUrl = catalogUrl(
+    `/cardlist.do?page=0&size=${PAGE_SIZE}&freewords=&categories=&illustrations=&colors=&blockIcons=&series=`,
+  );
+  const selectorFetch = await fetchWithRetry(selectorUrl, userAgent, sharedRequests, () => null, pace);
+  pace = selectorFetch.pace;
+  const selectorAttempt = selectorFetch.result;
+  pace = registerUrlOutcome(pace, { ok: selectorAttempt.status === 200 });
+  let selectorOptions: readonly SetOption[] = [];
+  if (selectorAttempt.status === 200) {
+    selectorOptions = parseCardListPage(selectorAttempt.text, 0).setOptions;
+  }
+
+  // 4. 계열 순회. 「다음에 무엇을 할 것인가」는 전부 series.ts가 정한다.
+  let carried: CollectRequestLog[] = sharedRequests;
+  let stoppedBy: CollectStopReason = "completed";
+
+  for (;;) {
+    const step = nextStep(progress, pace);
+    if (step.kind === "stop") {
+      stoppedBy = step.reason;
+      break;
+    }
+
+    // ⓘ-1 — 이미 완주한 세트는 **요청 0회로** 건너뛴다.
+    //
+    // 🚨 경계 robots보다 **먼저** 판정한다. 뒤에 두면 건너뛰는 세트마다
+    // robots 요청 1건이 나가고, 그 순간 「요청 0회」가 말뿐이 된다.
+    const setDir = join(args.outDir, "catalog", args.game, step.setCode);
+    const local = inspectSetLocally(setDir, args.refetch);
+    if (isSetComplete(local.existingPages, local.recovery)) {
+      console.log(`[${step.setCode}] 이미 완주 — 요청 0회로 건너뛴다.`);
+      progress = markSet(progress, step.setCode, {
+        status: "skipped_complete",
+        rowCount: local.rowCount,
+        manifestFile: null,
+      });
+      continue;
+    }
+
+    // ⓖ-1 — 세트 경계마다 robots를 다시 받는다. 계열의 첫 세트는 실행 시작
+    // 확인이 대신한다. 이 확인의 목적은 부하 규율이 아니라 §4.4.1 되돌릴
+    // 조건 1의 자동 감지기이고, 감지기의 값은 감지까지 걸리는 시간이 정한다.
+    if (step.needsRobotsCheck) {
+      await sleep(nextDelayMs(args.delayMs, args.jitterMs)); // ⓖ-4 — 세트 경계도 예외가 아니다.
+      const boundary = await fetchRobots(userAgent, carried);
+      progress = markRobotsCheck(progress);
+      robotsStatus = boundary.status ?? -1;
+      if (boundary.status !== ROBOTS_OK_STATUS) {
+        console.error(
+          `robots.txt가 404가 아니다 (status=${boundary.status ?? "network error"}) — 세트 경계 확인에서 발견. 계열 전체 중단.`,
+        );
+        progress = haltSeries(progress, "robots_changed");
+        stoppedBy = "robots_changed";
+        break;
+      }
+    }
+
+    console.log(`\n── [${step.setCode}] 수집 시작 (누적 요청 ${pace.requestCount}/${pace.maxRequests}) ──`);
+    const result = await collectSet({
+      args,
+      setCode: step.setCode,
+      userAgent,
+      stamp,
+      startedAt,
+      pace,
+      robotsStatus,
+      selectorOptions,
+      carriedRequests: carried,
+    });
+    pace = result.pace;
+    carried = []; // 공유 요청은 첫 세트 매니페스트에만 싣는다 — 복제하지 않는다.
+
+    // 세트의 종료 사유를 계열의 분류로 옮긴다. **판단은 classifySetOutcome
+    // (series.ts)이 한다** — 여기서는 그 결과를 markSet에 전달만 한다.
+    progress = markSet(progress, step.setCode, {
+      status: classifySetOutcome(result.stoppedBy),
+      rowCount: result.rowCount,
+      manifestFile: result.manifestFile,
+      stoppedBy: result.stoppedBy === "completed" ? null : result.stoppedBy,
+    });
+  }
+
+  progress = finalizeSeries(progress);
+  writeSeriesManifest(args, progress, pace, stoppedBy, startedAt, stamp);
+
+  // 🚨 마지막 줄 — 상한 도달과 완주는 종료 코드가 같으므로(둘 다 0) 이 줄이
+  //    유일한 구분이다(T1.24 ⓙ).
+  console.log(formatSeriesSummary(progress, stoppedBy));
+
+  const ok = stoppedBy === "completed" || stoppedBy === "max_requests";
+  process.exitCode = ok ? 0 : 1;
 }
 
 main().catch((err: unknown) => {
