@@ -17,10 +17,15 @@ import type { CardFacets } from "@/types/card";
 
 const ALL = "__all__";
 
+// 원피스는 opcg-kr·opcg-jp로 갈렸다(plan §4.12). opcg-jp는 아직 빈 게임 행이라
+// 목록에 넣지 않는다 — 넣으면 고를 수 있고 고르면 무조건 0건이 된다. JP 데이터가
+// 실제로 들어오면(§4.12 ⓘ-1, 이번 범위 밖) 그때 항목을 추가한다. 지금은 패싯
+// 기반으로 바꾸지 않는다 — 게임 목록은 2행(사실상 3행 중 데이터 있는 2행)뿐이라
+// 패싯 쿼리를 추가하는 비용이 하드코딩 유지보다 크다(plan §4.12 ⓗ 위임 판정).
 const GAME_OPTIONS = [
   { value: ALL, label: "전체 게임" },
   { value: "ptcg", label: "포켓몬" },
-  { value: "opcg", label: "원피스" },
+  { value: "opcg-kr", label: "원피스" },
 ];
 
 export interface CardFilters {

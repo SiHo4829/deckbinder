@@ -206,6 +206,7 @@ export type Database = {
       }
       games: {
         Row: {
+          base_game: string | null
           code: string
           copy_limit: number
           created_at: string
@@ -216,6 +217,7 @@ export type Database = {
           name_ko: string
         }
         Insert: {
+          base_game?: string | null
           code: string
           copy_limit: number
           created_at?: string
@@ -226,6 +228,7 @@ export type Database = {
           name_ko: string
         }
         Update: {
+          base_game?: string | null
           code?: string
           copy_limit?: number
           created_at?: string

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { composeGameRules } from "@/lib/domain/rules";
+import { baseGameCode, composeGameRules } from "@/lib/domain/rules";
 
 describe("composeGameRules", () => {
   // ★ plan §4.7 ⓑ의 재하드코딩 방지 장치가 이 케이스 하나다.
@@ -35,5 +35,17 @@ describe("composeGameRules", () => {
       role: "basic_pokemon",
       maxRedraws: Number.POSITIVE_INFINITY,
     });
+  });
+});
+
+describe("baseGameCode", () => {
+  // plan §4.12 ⓓ — GameRowCode(판 포함)를 GameCode(판 무관)로 좁힌다.
+  it("판 접미사가 있는 원피스 행 코드에서 기본 게임 코드를 뽑는다", () => {
+    expect(baseGameCode("opcg-kr")).toBe("opcg");
+    expect(baseGameCode("opcg-jp")).toBe("opcg");
+  });
+
+  it("접미사가 없는 행 코드는 그대로 돌려준다", () => {
+    expect(baseGameCode("ptcg")).toBe("ptcg");
   });
 });

@@ -76,14 +76,14 @@ test.describe("도감 필터 확장", () => {
   });
 
   test("레어도 필터가 URL에 반영되고 결과를 좁힌다", async ({ page }) => {
-    await page.goto(`/cards?game=opcg&rarity=RR${stamp}`);
+    await page.goto(`/cards?game=opcg-kr&rarity=RR${stamp}`);
 
     await expect(page.locator("article")).toHaveCount(2);
     await expect(page.locator("article").first()).toContainText(stamp);
   });
 
   test("키워드 하나를 고르면 그 키워드를 가진 카드가 모두 나온다", async ({ page }) => {
-    await page.goto(`/cards?game=opcg&rarity=RR${stamp}&keywords=${drawCode}`);
+    await page.goto(`/cards?game=opcg-kr&rarity=RR${stamp}&keywords=${drawCode}`);
 
     await expect(page.locator("article")).toHaveCount(2);
   });
@@ -91,7 +91,7 @@ test.describe("도감 필터 확장", () => {
   test("키워드를 여러 개 고르면 모두 가진 카드만 남는다 (AND 조합)", async ({ page }) => {
     // nuqs는 배열을 쉼표로 직렬화한다. 키워드 코드에 쉼표를 못 쓰게 막아둔 이유다.
     await page.goto(
-      `/cards?game=opcg&rarity=RR${stamp}&keywords=${drawCode},${counterCode}`,
+      `/cards?game=opcg-kr&rarity=RR${stamp}&keywords=${drawCode},${counterCode}`,
     );
 
     await expect(page.locator("article")).toHaveCount(1);
@@ -99,7 +99,7 @@ test.describe("도감 필터 확장", () => {
   });
 
   test("키워드 칩을 눌러 필터를 걸면 URL에 반영된다", async ({ page }) => {
-    await page.goto(`/cards?game=opcg&rarity=RR${stamp}`);
+    await page.goto(`/cards?game=opcg-kr&rarity=RR${stamp}`);
 
     await page.getByRole("button", { name: `카운터${stamp}` }).click();
 
@@ -108,7 +108,7 @@ test.describe("도감 필터 확장", () => {
   });
 
   test("게임을 바꾸면 하위 필터가 함께 초기화된다", async ({ page }) => {
-    await page.goto(`/cards?game=opcg&rarity=RR${stamp}&keywords=${drawCode}`);
+    await page.goto(`/cards?game=opcg-kr&rarity=RR${stamp}&keywords=${drawCode}`);
 
     await page.getByLabel("게임 선택").click();
     await page.getByRole("option", { name: "포켓몬" }).click();

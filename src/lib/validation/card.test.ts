@@ -22,6 +22,12 @@ describe("cardSearchParamsSchema", () => {
     expect(() => cardSearchParamsSchema.parse({ game: "ygo" })).toThrowError();
   });
 
+  it("원피스는 KR·JP 판 코드만 허용하고 옛 opcg는 거부한다 (plan §4.12)", () => {
+    expect(cardSearchParamsSchema.parse({ game: "opcg-kr" }).game).toBe("opcg-kr");
+    expect(cardSearchParamsSchema.parse({ game: "opcg-jp" }).game).toBe("opcg-jp");
+    expect(() => cardSearchParamsSchema.parse({ game: "opcg" })).toThrowError();
+  });
+
   it("공백만 있는 검색어는 없는 것으로 본다", () => {
     expect(cardSearchParamsSchema.parse({ q: "   " }).q).toBeUndefined();
   });

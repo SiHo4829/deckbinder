@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-/** 지원 게임 코드 (plan §4.0) */
-export const GAME_CODES = ["ptcg", "opcg"] as const;
+/** 지원 게임 코드. `games.code` 행 식별자다 — 원피스는 판(KR/JP)으로 갈린다 (plan §4.12) */
+export const GAME_CODES = ["ptcg", "opcg-kr", "opcg-jp"] as const;
 
 const optionalText = z
   .string()

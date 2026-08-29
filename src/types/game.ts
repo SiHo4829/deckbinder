@@ -9,6 +9,13 @@
 
 export type GameCode = "ptcg" | "opcg";
 
+/**
+ * DB `games.code`. 판(KR/JP)까지 포함한 행 식별자다 (plan §4.12 ⓓ).
+ * **`GameCode`는 이것과 다르다** — 도메인 룰은 판을 모른다. 새 판을 추가할 때
+ * 이 타입만 늘어나고 `GameCode`·`STRUCTURAL`·`composeGameRules`는 그대로다.
+ */
+export type GameRowCode = "ptcg" | "opcg-kr" | "opcg-jp";
+
 /** T2.3의 `deck_cards.zone` enum과 값이 일치해야 한다 (plan §4.1) */
 export type DeckZone = "main" | "leader" | "don";
 

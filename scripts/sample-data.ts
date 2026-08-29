@@ -27,7 +27,7 @@ async function main() {
   const games = (await (
     await fetch(`${url}/rest/v1/games?select=id,code`, { headers })
   ).json()) as { id: string; code: string }[];
-  const opcg = games.find((g) => g.code === "opcg")!.id;
+  const opcg = games.find((g) => g.code === "opcg-kr")!.id;
   const ptcg = games.find((g) => g.code === "ptcg")!.id;
 
   const sets = await post<{ id: string; code: string }>("card_sets", [

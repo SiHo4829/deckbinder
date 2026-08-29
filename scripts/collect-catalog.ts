@@ -7,8 +7,8 @@
  * 묻고, 마크업 해석은 `src/lib/catalog/parse.ts`에 맡긴다.
  *
  * 실행:
- *   단일  npm run catalog:collect -- --game opcg --set OPK-14 --max-requests 12
- *   계열  npm run catalog:collect -- --game opcg --sets OPK-01,…,OPK-14 --max-requests 120
+ *   단일  npm run catalog:collect -- --game opcg-kr --set OPK-14 --max-requests 12
+ *   계열  npm run catalog:collect -- --game opcg-kr --sets OPK-01,…,OPK-14 --max-requests 120
  *
  * 🚨 **`--max-requests`는 계열 전체의 총 상한이다. 세트당 상한이 아니다**
  * (§4.10 ⓐ). 세트당으로 두면 사람이 승인한 숫자와 상대가 받는 요청 수가

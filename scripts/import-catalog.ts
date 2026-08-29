@@ -7,8 +7,8 @@
  * 에 묻는다(ⓑ).
  *
  * 실행:
- *   드라이런  npm run catalog:import -- --game opcg --set OP01 --file data/catalog/opcg/OP01/cards.jsonl
- *   적재      npm run catalog:import -- --game opcg --set OP01 --file <path> --apply --from-report <report.json>
+ *   드라이런  npm run catalog:import -- --game opcg-kr --set OP01 --file data/catalog/opcg/OP01/cards.jsonl
+ *   적재      npm run catalog:import -- --game opcg-kr --set OP01 --file <path> --apply --from-report <report.json>
  *
  * 🚨 이 파일은 `vitest`의 `include`(`src/**\/*.{test,spec}.{ts,tsx}`)가 닿지
  * 않는다 — 판단이 들어가는 로직은 전부 `src/lib/catalog/`로 올렸다.

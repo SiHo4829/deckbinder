@@ -1,4 +1,4 @@
-import type { ExtraZoneRule, GameCode, GameRuleNumbers, GameRules, MulliganRule } from "@/types/game";
+import type { ExtraZoneRule, GameCode, GameRowCode, GameRuleNumbers, GameRules, MulliganRule } from "@/types/game";
 
 /**
  * 구조 룰 — **수치는 여기 두지 않는다** (plan §4.7 ⓑ).
@@ -49,4 +49,16 @@ export function composeGameRules(numbers: GameRuleNumbers, code: GameCode): Game
     copyLimit: numbers.copyLimit,
     ...STRUCTURAL[code],
   };
+}
+
+/**
+ * DB `games.code`(판 포함)를 도메인이 아는 `GameCode`(판 무관)로 좁힌다.
+ * 붙임표 뒤는 판 접미사이므로 버린다 (plan §4.12 ⓓ). 순수 함수 — DB를 모른다.
+ */
+export function baseGameCode(row: GameRowCode): GameCode {
+  const base = row.split("-")[0];
+  if (base !== "ptcg" && base !== "opcg") {
+    throw new Error(`알 수 없는 게임 행 코드: ${row}`);
+  }
+  return base;
 }

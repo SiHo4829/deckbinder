@@ -40,6 +40,6 @@ test.describe("카드 도감", () => {
     await page.getByLabel("게임 선택").click();
     await page.getByRole("option", { name: "원피스" }).click();
 
-    await expect(page).toHaveURL(/game=opcg/);
+    await expect(page).toHaveURL(/game=opcg-kr/);
   });
 });
