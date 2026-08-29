@@ -3334,7 +3334,15 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
     - ⓖ `src/types/database.ts` 재생성. 기존 테스트 전량 통과
     - ⓗ `lint` · `typecheck` · `test` 통과
 
-- [ ] **T1.18** 카탈로그 임포터 — 중간 파일 → DB · **L** · 선행 T1.16 · T1.17
+- [x] **T1.18** 카탈로그 임포터 — 중간 파일 → DB · **L** · 선행 T1.16 · T1.17
+  - ★★ **2026-08-29 구현 완료.** `src/lib/catalog/{normalize,plan,report,gate}.ts`(순수) + `scripts/import-catalog.ts`(배선) + `validation/catalog.ts` 가산(수치 표기 4종) + `package.json`에 `catalog:import` 추가. **DB 쓰기 0건 · 마이그레이션 0건 · 네트워크 0건**(테스트는 전부 인메모리 픽스처).
+  - **테스트:** 신규 61건 — `normalize.test.ts` 21 · `plan.test.ts` 16 · `report.test.ts` 9 · `gate.test.ts` 8 · `validation/catalog.test.ts` 가산 7(기존 9건 무수정). **전체 273 → 333건, 전부 통과.** `npm run typecheck` · `npm run lint` · `npx vitest run` 전부 그린.
+  - **ⓝ~ⓦ 대조:** ⓝ 판단은 4개 순수 모듈에, `scripts/`는 배선만(집계는 `report.ts`) ✅ · ⓞ life/cost 분배 + 실측 4건(`OP06-117`·`OP08-067_P2`·`ST04-008`·`ST04-013` 형태의 빈 문자열 케이스) invalid 고정 ✅ · ⓟ 수치 표기 4종(전각·소수점·부호·`-`/빈값) 처리 + 기존 9건 무수정 ✅ · ⓠ `image_url` 미사용(`rg` 확인, `source_image_url`만 등장) ✅ · ⓡ `base_code` 미사용 · `card_keywords`/`card_sets`/`games` 쓰기 0건(`rg` 확인) ✅ · ⓢ 관문 2 — 이름 패턴 + 크기>0 + mtime 최대, 면제 플래그 없음 ✅ · ⓣ 관문 3 — 해시·game·set·mode 대조 + 결론 확인, `checkApplyGates`가 첫 실패에서 멈추지 않음 ✅ · ⓤ 실측 중복 3건(`OP09-089_P1`·`OP06-110_P1`·`OP09-043_P1`)이 `skip:other_set`으로 분류되는 것을 `plan.test.ts` #6이 고정 ✅ · ⓥ 최소 46건(정의: normalize16·plan16·report6·gate8) 대비 61건 초과 달성, DB 쓰기 테스트 0 · E2E 0 ✅ · ⓦ 「중간 파일 하나에 세트 둘 이상 거부」 미적용 — `sourceSetLabel`은 세트 판정에 쓰지 않고 리포트 관측 항목으로만 남김 ✅
+  - **판단이 필요해 계약 밖에서 임의로 정한 것(계약이 명시하지 않은 자리):**
+    1. `PrefixMismatchSummary`에 `rows: readonly string[]`을 추가했다 — ⓒ의 타입 정의에는 없지만 ⓙ #15·#16이 "행 목록이 채워진다/비어 있다"를 명시적으로 요구해, 그 값을 실을 자리가 필요했다.
+    2. `plan.ts`와 `report.ts`가 둘 다 `ImportConclusion`(plan.ts 정의)에서 `ImportCounts`(report.ts 정의)를 참조해 타입 전용 순환 참조가 생겼다 — 계약이 두 파일에 걸쳐 타입을 나눠 정의했기 때문이며(`import type`이라 런타임 순환은 없다).
+    3. `isPrefixMismatch`(접두사 비교)는 `code.split("-")[0].split("_")[0]`로 단순 비교했다 — 계약이 "code 정규식을 만들지 않는다"고만 정하고 정확한 비교 로직은 위임했다.
+    4. `scripts/import-catalog.ts`는 raw `fetch` → PostgREST를 썼다(`@/lib/supabase/admin.ts`는 `server-only`를 import해 `tsx` 실행 시 throw한다) — 기존 `scripts/sample-data.ts`·`cleanup-sample.ts`의 선례를 따랐다.
   - ★★ **구현 계약이 §4.11로 확정됐다 (2026-08-29).** 모듈 경계 · 공개 시그니처 · 17필드 매핑표 · 관문 넷의 구현 방법 · 실패 모드 · 테스트 46건 내역이 전부 그 절에 있다. **아래 완료 기준은 그 계약의 체크리스트이고, 어긋나면 §4.11이 우선한다.** 🚨 **§4.11은 40세트 3,146행 전량 실측 위에서 쓰였다 — 「표본을 전량으로 착각한 판정」이 이 세션에만 세 번 뒤집혔다는 기록이 그 절 머리말에 있다.**
   - **완료 기준**
     - ⓐ `npm run catalog:import -- --game opcg --set OPK-14 --file <path>`가 **드라이런으로 동작한다(기본값).** `--apply` 없이는 DB에 **한 바이트도 쓰지 않는다**

@@ -93,3 +93,64 @@ describe("normalizedCardSchema", () => {
     expect(normalize({ attribute: "속성가" }).attribute).toBe("속성가");
   });
 });
+
+// 🚨 plan §4.11 ⓕ — 전량 실측에서 나온 수치 표기 3종(전각 · 소수점 `.0` · 부호
+// `+`)을 가산한다. 기존 케이스(위)는 하나도 고치지 않는다.
+describe("normalizedCardSchema — 수치 표기 4종 (plan §4.11 ⓕ)", () => {
+  it("전각 숫자 '０'~'９' → NFKC로 반각 정수", () => {
+    expect(normalize({ powerRaw: "３０００" }).power).toEqual({
+      value: 3000,
+      invalid: false,
+      raw: "３０００",
+    });
+  });
+
+  it("소수점 '2.0' → 2 (정수화) · '2000.0' → 2000", () => {
+    expect(normalize({ powerRaw: "2.0" }).power).toEqual({ value: 2, invalid: false, raw: "2.0" });
+    expect(normalize({ counterRaw: "2000.0" }).counter).toEqual({
+      value: 2000,
+      invalid: false,
+      raw: "2000.0",
+    });
+  });
+
+  it("🚨 0이 아닌 소수 '2.5'는 여전히 invalid다", () => {
+    const result = normalize({ powerRaw: "2.5" });
+    expect(result.power.invalid).toBe(true);
+    expect(result.power.value).toBeNull();
+    expect(result.power.raw).toBe("2.5");
+  });
+
+  it("부호 접두 '+1000' → 1000 (선행 + 1개 제거)", () => {
+    expect(normalize({ counterRaw: "+1000" }).counter).toEqual({
+      value: 1000,
+      invalid: false,
+      raw: "+1000",
+    });
+    expect(normalize({ counterRaw: "+2000" }).counter).toEqual({
+      value: 2000,
+      invalid: false,
+      raw: "+2000",
+    });
+  });
+
+  it("🚨 음수 표기 '-1000'은 관측되지 않았고, 나오면 invalid다(부호를 해석하지 않는다)", () => {
+    const result = normalize({ counterRaw: "-1000" });
+    expect(result.counter.invalid).toBe(true);
+    expect(result.counter.value).toBeNull();
+    expect(result.counter.raw).toBe("-1000");
+  });
+
+  it("blockNumberRaw도 같은 규칙을 쓴다 — '-' → null · '1' → 1", () => {
+    expect(normalize({ blockNumberRaw: "-" }).blockNumber).toEqual({
+      value: null,
+      invalid: false,
+      raw: "-",
+    });
+    expect(normalize({ blockNumberRaw: "1" }).blockNumber).toEqual({
+      value: 1,
+      invalid: false,
+      raw: "1",
+    });
+  });
+});

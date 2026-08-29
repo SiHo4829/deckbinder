@@ -45,13 +45,21 @@ export interface NumericField {
   readonly raw: string;
 }
 
+/**
+ * 처리 순서(plan §4.11 ⓕ, 고정) — trim → NFKC → 선행 `+` 1개 제거 →
+ * `-`/""면 null → `/^\d+(\.0+)?$/`면 정수 → 그 밖은 invalid + 원문 보존.
+ *
+ * 🚨 NFKC는 이 함수(수치 칸)에만 건다 — 텍스트 필드는 원문 보존이 원칙이다.
+ */
 function parseNumericField(raw: string): NumericField {
-  const trimmed = raw.trim();
-  if (trimmed === "-" || trimmed === "") {
+  const trimmed = raw.trim().normalize("NFKC");
+  const unsigned = trimmed.startsWith("+") ? trimmed.slice(1) : trimmed;
+  if (unsigned === "-" || unsigned === "") {
     return { value: null, invalid: false, raw };
   }
-  if (/^\d+$/.test(trimmed)) {
-    return { value: Number(trimmed), invalid: false, raw };
+  if (/^\d+(\.0+)?$/.test(unsigned)) {
+    // 🚨 0이 아닌 소수(예: "2.5")는 이 정규식에 걸리지 않아 invalid로 떨어진다.
+    return { value: Math.trunc(Number(unsigned)), invalid: false, raw };
   }
   // 🚨 null로 삼키지 않는다 — 알려진 "없음" 표기(-·"")와 모르는 문자열을 가른다.
   return { value: null, invalid: true, raw };
