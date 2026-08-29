@@ -73,28 +73,38 @@ export const newsPostInputSchema = z.object({
 
 export type NewsPostInput = z.infer<typeof newsPostInputSchema>;
 
-export const cardInputSchema = z.object({
-  game_id: z.uuid(),
-  set_id: z
-    .string()
-    .nullish()
-    .default(null)
-    .transform((v) => (typeof v === "string" && v.trim().length > 0 ? v.trim() : null))
-    .refine((v) => v === null || z.uuid().safeParse(v).success, "세트 선택이 올바르지 않습니다."),
-  code: required("카드 코드"),
-  // name_ja는 크롤러가 일본 중고 매물을 검색하는 유일한 키다 (plan §4.4).
-  name_ja: required("name_ja (일본어 카드명)"),
-  name_ko: optional,
-  name_en: optional,
-  rarity: optional,
-  attribute: optional,
-  card_type: optional,
-  /** basic_energy면 덱 매수 제한에서 면제된다 (plan §4.0) */
-  sub_type: optional,
-  image_url: optionalUrl,
-  effect_text: optional,
-  /** 효과 키워드. card_keywords에 별도로 넣는다. */
-  keyword_ids: z.array(z.uuid()).nullish().default([]).transform((v) => v ?? []),
-});
+export const cardInputSchema = z
+  .object({
+    game_id: z.uuid(),
+    set_id: z
+      .string()
+      .nullish()
+      .default(null)
+      .transform((v) => (typeof v === "string" && v.trim().length > 0 ? v.trim() : null))
+      .refine((v) => v === null || z.uuid().safeParse(v).success, "세트 선택이 올바르지 않습니다."),
+    code: required("카드 코드"),
+    // name_ja는 크롤러가 일본 중고 매물을 검색하는 유일한 키다 (plan §4.4·§5.3).
+    // T1.17(2026-08-29): 유일 원천(onepiece-cardgame.kr)이 일본어명을 주지 않는
+    // 것이 실측됐다(plan §4.8 ⓙ-1). "필수"는 name_ko와 상호 대체 가능으로
+    // 완화한다 — 단독 필수는 유지하지 않는다. 아래 object-level .refine()이
+    // "둘 중 최소 하나"를 강제한다. name_ko를 대신 채우는 것은 여전히 금지다
+    // (plan §4.8 ⓕ 🚨 — name_ja를 한국어명으로 오염시키지 않는다).
+    name_ja: optional,
+    name_ko: optional,
+    name_en: optional,
+    rarity: optional,
+    attribute: optional,
+    card_type: optional,
+    /** basic_energy면 덱 매수 제한에서 면제된다 (plan §4.0) */
+    sub_type: optional,
+    image_url: optionalUrl,
+    effect_text: optional,
+    /** 효과 키워드. card_keywords에 별도로 넣는다. */
+    keyword_ids: z.array(z.uuid()).nullish().default([]).transform((v) => v ?? []),
+  })
+  .refine((v) => v.name_ko !== null || v.name_ja !== null, {
+    message: "name_ko와 name_ja 중 최소 하나는 필요합니다.",
+    path: ["name_ja"],
+  });
 
 export type CardInput = z.infer<typeof cardInputSchema>;

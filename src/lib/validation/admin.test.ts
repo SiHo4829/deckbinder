@@ -65,16 +65,29 @@ describe("cardInputSchema", () => {
     expect(result.rarity).toBeNull();
   });
 
-  it("name_ja는 필수다 (크롤러 검색 키, plan §4.4)", () => {
-    expect(() => cardInputSchema.parse({ ...validCard, name_ja: "" })).toThrowError(
-      /name_ja/,
-    );
+  it("name_ja와 name_ko가 둘 다 없으면 거부한다 (T1.17 — name_ko와 상호 대체 가능, plan §4.8 ⓕ)", () => {
+    expect(() =>
+      cardInputSchema.parse({ ...validCard, name_ja: "", name_ko: "" }),
+    ).toThrowError(/name_ko|name_ja/);
   });
 
-  it("name_ko는 선택이다", () => {
+  it("name_ja가 없어도 name_ko만 있으면 통과한다 (원천이 일본어명을 주지 않는 카드가 실측됐다, plan §4.8 ⓙ-1)", () => {
+    const result = cardInputSchema.parse({
+      game_id: validCard.game_id,
+      code: validCard.code,
+      name_ja: "",
+      name_ko: "몽키 D 루피",
+    });
+
+    expect(result.name_ja).toBeNull();
+    expect(result.name_ko).toBe("몽키 D 루피");
+  });
+
+  it("name_ko는 선택이다 (name_ja만 있어도 통과한다)", () => {
     expect(cardInputSchema.parse({ ...validCard, name_ko: "몽키 D 루피" }).name_ko).toBe(
       "몽키 D 루피",
     );
+    expect(cardInputSchema.parse(validCard).name_ko).toBeNull();
   });
 
   it("코드 앞뒤 공백을 제거한다", () => {

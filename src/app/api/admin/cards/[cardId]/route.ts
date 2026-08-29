@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import type { Database } from "@/types/database";
+
 import { requireAdmin } from "@/lib/admin/guard";
 import { requireAdminInput } from "@/lib/admin/input";
 import { databaseError } from "@/lib/admin/responses";
@@ -21,9 +23,13 @@ export async function PATCH(
   const { keyword_ids: keywordIds, ...card } = input.data;
   const db = createSupabaseAdminClient();
 
+  // 🚨 T1.17(plan §4.8 ⓕ ★★) — POST 핸들러의 캐스트와 같은 이유·같은 임시
+  // 상태다. name_ja를 nullable로 완화한 것은 cardInputSchema뿐이고,
+  // src/types/database.ts는 db:types 재생성 전까지 name_ja를 여전히
+  // not null로 본다.
   const { data, error } = await db
     .from("cards")
-    .update(card)
+    .update(card as Database["public"]["Tables"]["cards"]["Update"])
     .eq("id", cardId)
     .select("id,code")
     .maybeSingle();
