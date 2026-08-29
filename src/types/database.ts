@@ -70,7 +70,7 @@ export type Database = {
           created_at: string
           game_id: string
           id: string
-          name_ja: string
+          name_ja: string | null
           name_ko: string | null
           released_at: string | null
         }
@@ -79,7 +79,7 @@ export type Database = {
           created_at?: string
           game_id: string
           id?: string
-          name_ja: string
+          name_ja?: string | null
           name_ko?: string | null
           released_at?: string | null
         }
@@ -88,7 +88,7 @@ export type Database = {
           created_at?: string
           game_id?: string
           id?: string
-          name_ja?: string
+          name_ja?: string | null
           name_ko?: string | null
           released_at?: string | null
         }

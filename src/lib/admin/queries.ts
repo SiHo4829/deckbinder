@@ -30,7 +30,7 @@ export async function fetchGames(): Promise<GameOption[]> {
 export async function fetchSets(): Promise<SetOption[]> {
   const { data } = await createSupabaseAdminClient()
     .from("card_sets")
-    .select("id,code,name_ja,game_id")
+    .select("id,code,name_ja,name_ko,game_id")
     .order("code");
   return data ?? [];
 }

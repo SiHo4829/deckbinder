@@ -57,7 +57,10 @@ export async function GET(request: Request) {
     sets: (setsRes.data ?? []).map((s) => ({
       id: s.id,
       code: s.code,
-      label: s.name_ko ?? s.name_ja,
+      // 009 이후 name_ja·name_ko 어느 쪽도 단독 보장이 아니다. 체크 제약이
+      // 둘 중 하나를 보장하지만 그것은 런타임의 것이라, 세트 코드로 떨어진다
+      // (types/admin.ts setDisplayName과 같은 판정).
+      label: s.name_ko ?? s.name_ja ?? s.code,
     })),
     keywords: (keywordsRes.data ?? []).map((k) => ({ code: k.code, label: k.label_ko })),
   };

@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { SetForm } from "@/components/features/admin/set-form";
 import { fetchGames, fetchSets } from "@/lib/admin/queries";
+import { setDisplayName } from "@/types/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,7 @@ export default async function AdminSetsPage() {
                   href={`/admin/sets/${s.id}`}
                   className="block rounded border px-2 py-1 text-xs hover:bg-accent"
                 >
-                  <span className="font-mono">{s.code}</span> · {s.name_ja}
+                  <span className="font-mono">{s.code}</span> · {setDisplayName(s)}
                 </Link>
               </li>
             ))}

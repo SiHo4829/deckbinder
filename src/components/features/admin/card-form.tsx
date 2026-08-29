@@ -12,7 +12,7 @@ import {
 import { useAdminForm } from "@/components/features/admin/use-admin-form";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
-import type { GameOption, KeywordOption, SetOption } from "@/types/admin";
+import { setDisplayName, type GameOption, type KeywordOption, type SetOption } from "@/types/admin";
 
 const EMPTY = {
   game_id: "",
@@ -153,7 +153,7 @@ export function CardForm({
             <option value="">(세트 없음)</option>
             {availableSets.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.code} · {s.name_ja}
+                {s.code} · {setDisplayName(s)}
               </option>
             ))}
           </NativeSelect>

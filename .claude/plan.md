@@ -47,6 +47,8 @@
 | **§9.2 ⓒ 전제 3(관리자 API 파괴 표면 동결)은 깨지지 않는다 — 유지한다.** 임포터는 `/api/admin/*`에 엔드포인트를 0개 만들고, 기본은 **insert-only**이며 **DELETE 경로가 없다** | §4.8 ⓕ · §9.2 ⓒ ★ |
 | 🚨 **`name_ja`를 한국어명으로 채우지 않는다. 그 경로를 코드에 만들지 않는다** — 오염이 조용하고 늦게 발견되며 화면에는 정상으로 보인다 | §4.8 ⓕ ★ |
 | **스키마 공백 4건은 「셋 + 하나」로 갈린다.** ptcg 기본 포켓몬(§4.7 ⓗ-1)만 재료가 생기지 않아 T1.17에서 닫지 않는다 | §4.8 ⓗ ★ |
+| ★★ **프로모 카드는 별도 `card_sets` 행이다. 코드 접두사로 세트를 추론하지 않는다 — 파일(디렉토리명)이 곧 세트다** (2026-08-29 사용자 결정) | §0.1 ⓕ · §4.11 ⓔ ★ |
+| ★★ **T1.18 임포터 계약은 §4.11이다 — 40세트 3,146행 전량 실측 위에 서 있다.** 판단은 `src/lib/catalog/`의 순수 함수 넷(`normalize`·`plan`·`report`·`gate`), `scripts/`는 배선. **집계도 순수 모듈에 둔다** | §4.11 ⓑ · ⓘ ★ |
 
 ---
 
@@ -298,6 +300,10 @@ A-5는 「CSV 일괄 등록 · L」로 서 있고 선행이 **T1.13(완료) · T
 ⚠️ **그러나 「광고를 안 붙이면 ②축이 해결된다」는 틀린 말이다.** §9.3 ⓑ가 「②축 금지 조항은 수집 방법도 영리성도 조건으로 달지 않는다」를 실측했고 §9.1이 ⚠️⚠️로 같은 것을 적었다. **광고가 새로 켜는 것은 ④축 하나다. 이 구분을 흐리지 않는다.**
 
 **그리고 기술 위험이 아닌 위험이 하나 더 생긴다 — 판단이 무뎌지는 위험이다.** 되돌릴 조건 3(권리자 중지 요청)이 왔을 때 **광고 수익이 걸려 있으면 내리는 결정이 늦어진다.** 이 문서는 지금까지 그런 종류를 명시해 왔다(§4.4.1 ⓑ의 「배포 뒤에 물으면 협상 위치가 나빠진다」가 같은 형식이다). **→ §4.4.1 되돌릴 조건 표에 행으로 넣었다.**
+
+### ⓕ 프로모 카드는 별도 세트다 — 코드 접두사로 세트를 추론하지 않는다 (2026-08-29 사용자 결정)
+
+**PROMO 카드의 `set_id`는 PROMO 세트 행을 가리킨다. 원본 부스터·스타터 세트에 귀속시키지 않는다.** 그 결과 **임포터는 `code` 접두사 → 세트 코드 매핑 규칙을 만들지 않는다 — 파일(디렉토리명)이 곧 세트다.** 근거 다섯(⚊ 원천의 `【프로모션】` 목록과 1:1 ⚊ 원본과의 연결은 `base_code`가 이미 한다 ⚊ `/sets/[setId]`에서 「세트 = 실제로 뜯을 수 있는 것」이 지켜진다 ⚊ 접두사 매핑은 관측이 아니라 추론이다 ⚊ 되돌리기가 `set_id` 한 컬럼 UPDATE다)와 **결정 뒤에 나와 결정을 강화한 실측 둘**(접미사 없는 104행은 귀속시킬 원본이 아예 없다 · `ST15`~`ST20` 접두사에 해당하는 세트 옵션이 원천에 없다)의 전문은 **§4.11 ⓔ**와 **§8 사용자 일감 4c**에 있다. **계약은 §4.11이다.**
 
 ---
 
@@ -1420,7 +1426,9 @@ src/lib/catalog/
 ├── parse.ts              # HTML 문자열 → CollectedCard[]   ★ 순수 함수. 테스트 대상
 ├── pace.ts               # 부하 규율 상태 기계               ★ 순수 함수. 테스트 대상
 ├── normalize.ts          # CollectedCard → cards Insert     ★ 순수 함수. 테스트 대상
-└── plan.ts               # 기존 행 + 중간 파일 → ImportPlan  ★ 순수 함수. 테스트 대상
+├── plan.ts               # 기존 행 + 중간 파일 → ImportPlan  ★ 순수 함수. 테스트 대상
+├── report.ts             # ★ 2026-08-29 추가(§4.11 ⓑ) — 집계·리포트 조립. 🚨 집계를 scripts/에 두지 않는다
+└── gate.ts               # ★ 2026-08-29 추가 — --apply 관문 넷의 판정(fs를 import 하지 않는다)
 src/lib/validation/catalog.ts   # zod — 중간 파일 1행의 형식 계약
 scripts/
 ├── collect-catalog.ts    # T1.16 진입점 — fetch · 파일 쓰기 · CLI 인자
@@ -1561,7 +1569,7 @@ data/import-report-<stamp>.json                            # T1.18 (ⓖ)
 | **키워드 연결 실패** | 그 **카드를 되돌린다** | `POST /api/admin/cards`가 이미 이 패턴이다(§5.1). 두 입력 경로가 다른 상태를 만들지 않게 한다. ⚠️ **단 1차 적재에서는 키워드 태깅을 하지 않는다** — 원천이 우리 `keywords` 코드 체계를 모른다 |
 | **게임 매핑 부재** | `--game opcg`를 **필수 인자**로 받고 `games.code`로 조회한다. 없으면 **시작 거부** | |
 | 🚨 **세트 매핑 부재** | **자동 생성하지 않는다.** `--set OPK-14`가 `card_sets`에 없으면 드라이런이 **「적재 불가」**로 결론짓고 `--apply`를 거부한다. 세트는 사람이 `/admin/sets`에서 먼저 만든다 | 자동 생성하면 원천 라벨이 그대로 `card_sets.code`가 되는데, **카드가 한 장 붙는 순간 `on delete restrict`가 세트 삭제를 막는다** — T1.15가 앞으로 당겨진 이유가 정확히 그 함정이다. **그리고 ⓙ에서 이미 어긋남을 관측했다: 세트 라벨은 `[OPK-14]`인데 카드 코드는 `OP14-001`이다.** 추론 규칙을 코드에 넣으면 다음 세트에서 조용히 틀린다.<br>★ **2026-08-28 — 어긋남이 하나가 아니라 규칙적이라는 것이 더 위험하다.** `[STK-28]`의 자기 코드는 `ST28-***`였다. **관측 2건이 「라벨에서 `K`를 뺀 것이 코드 접두사」로 보이게 만들고, 그럴듯한 규칙이 바로 그 이유로 코드에 들어간다.** ⚠️ **`[EBK-*]`는 확인하지 않았고 `【프로모션】`은 라벨에 코드 자체가 없다.** 두 건으로 만든 규칙을 41개 세트에 적용하는 것이 정확히 §4.4.1이 미끄러진 형태다. **매핑은 계속 사람이 `/admin/sets`에서 만든다** |
-| **중간 파일 하나에 세트가 둘 이상** | **거부한다.** 중간 파일 1개 = 세트 1개를 강제한다 | 수집기가 세트 단위로 도는데(ⓔ) 파일이 섞이면 매핑을 추론해야 한다. **추론하지 않기 위한 제약이다.** ★ **여기서 「세트」는 `sourceSetLabel`(수집해 온 목록)이지 「그 카드의 소속 세트」가 아니다** — ⓙ 발견 B 이후 둘이 다를 수 있다. 그래서 매니페스트 필드 이름을 `set`이 아니라 **`sourceSetLabel`**로 둔다(ⓚ-2). **이름이 `set`이면 다음 사람이 카드의 소속으로 읽는다** |
+| **중간 파일 하나에 세트가 둘 이상** | ~~**거부한다.** 중간 파일 1개 = 세트 1개를 강제한다~~ → ★★ **2026-08-29 뒤집혔다(§4.11 ⓘ-2). 거부하지 않는다** — PROMO 파일 하나에 `sourceSetLabel` 고유값이 **83개**라 문자 그대로 적용하면 PROMO가 영원히 적재 불가다. **원 조항의 목적(세트 매핑을 추론하지 않는다)은 「디렉토리명 = 세트」가 더 강하게 달성한다.** 거부 조건이 **리포트 관측 항목으로 강등**된 것이지 없어진 것이 아니다 | 수집기가 세트 단위로 도는데(ⓔ) 파일이 섞이면 매핑을 추론해야 한다. **추론하지 않기 위한 제약이다.** ★ **여기서 「세트」는 `sourceSetLabel`(수집해 온 목록)이지 「그 카드의 소속 세트」가 아니다** — ⓙ 발견 B 이후 둘이 다를 수 있다. 그래서 매니페스트 필드 이름을 `set`이 아니라 **`sourceSetLabel`**로 둔다(ⓚ-2). **이름이 `set`이면 다음 사람이 카드의 소속으로 읽는다** |
 | `code` 접두사가 `--set`과 어긋난다 (프로모 혼입 등) | ~~**경고로 표시하고 건수를 센다. 차단하지는 않는다**~~ → ★ **비율로 문구를 가른다. 여전히 차단하지 않는다** | 코드 규칙은 우리가 정한 것이 아니다. 사람이 리포트를 보고 판단한다.<br>★ **행 단위 경고는 STK 세트에서 무너진다** — ⓙ 실측에서 `[STK-28]` 1페이지 15행 중 **10행이 다른 세트 접두사**였다. 전량에 가까운 경고는 **경고가 아니라 소음**이고, 소음이 되는 순간 진짜 혼입을 못 본다. **→ 리포트에 「접두사 불일치 N / 전체 M (r%)」 한 줄을 내고 `r`로 문구를 가른다:** `r = 0` 무언 · `0 < r < 100` **「혼입 의심 — 행 목록」**(행을 찍는다) · `r = 100` **「재판 전용 세트로 보인다」**(행을 찍지 않는다).<br>⚠️ **임계값을 판단으로 쓰지 않는다** — 어느 쪽이든 차단하지 않고, `r`은 **사람이 무엇을 볼지**만 정한다 |
 | **필수 컬럼 결측** — `code` | **전건 차단** | |
 | 🚨 **필수 컬럼 결측 — `name_ja`** | ~~**전건 차단.**~~ → ★ **T1.17 이후에는 `null`로 넣는다(정상 경로).** 대신 **`name_ko`도 `name_ja`도 없으면 그 행이 `invalid`**다. **그리고 한국어명으로 채우는 경로를 코드에 만들지 않는다 — 이쪽은 바뀌지 않는다** | **이 설계에서 가장 위험한 지점이다 — 아래 별도 항목.** ★ **「전건 차단」은 판정을 강제하기 위한 퓨즈였고, 2026-08-28에 판정이 나왔으므로 퓨즈를 내린다**(선택지 ⓐ). ⚠️ **T1.17이 적용되지 않은 채 T1.18을 돌리면** DB가 `23502`(not null 위반)로 전부 거절하고 **「연속 10건 실패 → 중단」**이 받는다 — 조용히 통과하는 경로가 아니다 |
@@ -1578,6 +1586,12 @@ data/import-report-<stamp>.json                            # T1.18 (ⓖ)
 | ✅ **재현 가능성.** 순서가 고정되면 누가 언제 돌려도 같은 카탈로그가 나온다 | **이것이 진짜 근거다** |
 | ⚠️ **「원판이 옳다」는 근거가 아니다** | 처음엔 「부스터가 원판이니 `set_id`는 부스터여야 한다」로 쓰려 했으나 **관측이 그것을 지지하지 않는다.** `[STK-28]`이 담은 다른 세트 코드 10건은 **전부 `_P1`/`_P3` 패러렐**이었다 — 즉 **그 인쇄본은 스타트 덱에만 들어 있는 것일 수 있고, 그러면 옳은 `set_id`는 STK 쪽이다.** ★ **어느 쪽이 옳은지 우리는 모른다. 모르는 것을 규칙으로 고정하지 않고, 대신 결과가 흔들리지 않게만 한다** |
 | ❓ **겹침이 실제로 있는지도 아직 모른다** | `[STK-28]`에 `OP06-022_P3`가 있다는 것은 확인했지만 **`[OPK-06]` 목록에도 그 코드가 있는지는 열어 보지 않았다.** 없다면 각 코드는 정확히 한 세트에만 속하고 이 순서 규칙은 발동조차 하지 않는다. **답은 T1.18 드라이런의 `skip:other_set` 건수가 준다 — 요청 0회로** |
+
+**★★ 2026-08-29 전량 실측 — 이 규칙은 살아 있고, 실제로 발동한다. 「겹침이 있는지 모른다」가 닫혔다.**
+
+- **위 표의 ❓ 행(「겹침이 실제로 있는지도 아직 모른다」)에 답이 나왔다 — 요청 0회로.** 40세트 3,146행 전수 집계 결과 **세트 간 `code` 중복은 3건**이다: `OP09-089_P1`(PROMO·STK-27) · `OP06-110_P1`(PROMO·STK-28) · `OP09-043_P1`(PROMO·STK-25). **`cards`의 `unique (game_id, code)`가 실제로 충돌한다.**
+- ⚠️ **설계 중간에 「중복 0건이므로 이 규칙의 전제가 무너졌다」는 보고가 한 번 있었고 그것은 틀렸다** — PROMO 80행 시점의 집계였다. **표본을 전량으로 착각한 사례이고, 옛 문장을 지우지 않고 §4.11 머리말의 정정표에 남겼다.**
+- **→ 규칙은 「방어적으로 남긴다」가 아니라 「쓰인다」로 격상된다.** 순서대로면 3건은 **PROMO로 굳고** STK-25·27·28에서 `skip:other_set` 3건으로 보고된다. **판정 전문과 되돌리는 방법은 §4.11 ⓗ-4에 있다.**
 
 **→ 첫 실행 세트는 `[OPK-14]`를 유지한다.** 접두사가 `OP14-` 하나뿐이라 **세트 매핑이 맞았는지를 눈으로 가장 쉽게 검증할 수 있고**, 8페이지라 **페이지네이션 순회와 재실행 skip이 실제로 한 번 돈다.** ⚠️ `[STK-28]`은 1페이지·요청 2회로 더 싸지만 **첫 실행의 목적이 검증이라 그 경로들이 한 번도 돌지 않는 대상을 첫 대상으로 삼지 않는다.** **두 번째 실행 후보로는 `[STK-28]`이 가장 좋다** — 접두사 혼재와 `skip:other_set`을 가장 싸게 실측한다.
 
@@ -1649,8 +1663,8 @@ data/import-report-<stamp>.json                            # T1.18 (ⓖ)
 | 3 | **코스트 · 파워 · 카운터를 담을 컬럼이 없다** | §9.4 ⓐ | ✅ | ⓙ에서 목록에 **코스트와 파워가 실제로 나오는 것**을 확인했다. ★ **단 코스트는 독립 필드가 아니다 — 라이프와 한 칸을 나눠 쓴다**(발견 A) |
 | 4 | **원피스 特徴을 `sub_type`에 넣을 수 없다** | T1.14 (§0.1 ⓓ) | ✅ | ⓙ에서 特徴(`초신성` · `하트 해적단`)이 나오는 것을 확인했다. **표기는 슬래시 구분 단일 문자열** |
 | ★ 5 | **`cardTrigger`를 담을 컬럼이 없다** | ⓙ (2026-08-28) | ✅ | 🚨 **§4.8이 한 번도 언급하지 않았던 필드다.** 4번까지의 목록은 「우리가 아쉬웠던 것」에서 나왔고 **원천이 실제로 무엇을 주는지에서 나온 것이 아니었다** |
-| ★ 6 | **`animationType`(일러스트 구분)을 담을 컬럼이 없다** | ⓙ | ✅ | `오리지널` · `원작` |
-| ★ 7 | **`blockNumber`(블록 아이콘)를 담을 컬럼이 없다** | ⓙ | ✅ | `4` · `2` · `3` |
+| ★ 6 | **`animationType`(일러스트 구분)을 담을 컬럼이 없다** | ⓙ | ✅ | ~~`오리지널` · `원작`~~ → ★★ **2026-08-29 전량 실측: 4종이다** — 오리지널 2,326 · 원작 533 · 애니메이션 260 · **「그 외」 27**. **「둘뿐」은 1세트 표본이었다**(§4.11 머리말) |
+| ★ 7 | **`blockNumber`(블록 아이콘)를 담을 컬럼이 없다** | ⓙ | ✅ | ~~`4` · `2` · `3`~~ → ★★ **2026-08-29: `1`도 있고**(`ST04-008`) **빈 값이 35행이다**(→ `null`) |
 | ★ 8 | 🚨 **`life` 한 칸이 카드 종류에 따라 라이프와 코스트를 겸한다** | ⓙ 발견 A | ✅ | **리더 → 라이프 · 캐릭터/이벤트 → 코스트.** 구분 근거는 `cardType`밖에 없다 |
 
 **4번에 대해 지금 못박는 것 하나.** **特徴을 `sub_type`에 넣지 않는다.** `sub_type`은 §4.0이 **`basic_energy` 판정 전용**으로 못박은 단일 텍스트 컬럼인데 **特徴은 한 카드에 여럿이다.** 다대다이므로 `card_keywords`와 같은 모양이 자연스럽지만, `keywords`는 §4.1이 **효과 키워드**로 정의했고 特徴은 다른 축이다 — **어느 모양으로 갈지는 T1.17이 정하고, 여기서는 `sub_type`이 선택지가 아니라는 것만 닫는다.**
@@ -1685,6 +1699,7 @@ data/import-report-<stamp>.json                            # T1.18 (ⓖ)
 - **합치면 「코스트 4 이하」 필터가 라이프 4인 리더를 함께 잡는다.** 값의 타입이 같아 **에러가 나지 않고**, 화면에 리더가 섞여 나올 뿐이다 — §0.1 ⓓ 위험 4번(조용한 오적재)이 필터 결과의 모양으로 나타난 것이다.
 - **분배 규칙은 `cardType`에 의존한다. 그러므로 파서가 아니라 `normalize.ts`가 한다**(ⓚ-2 — 중간 파일에는 `lifeRaw`로 원문을 그대로 남긴다). **파서가 해석하면 원문이 파일에서 사라져 T1.17이 판단할 재료가 없어진다.** ★ **마이그레이션 008은 `life`·`cost` 두 컬럼을 만들기만 한다 — 이 분배 로직 자체(어느 `cardType`이면 어느 컬럼인가)는 T1.18(임포터)의 몫으로 남긴다.**
 - 🚨 **알려진 종류(`리더`·`캐릭터`·`이벤트`) 밖의 `cardType`이 오면 그 행은 `invalid`다.** 조용히 둘 다 null로 두지 않는다. ~~⚠️ 스테이지는 게임에 존재할 것이나 두 페이지에서 관측되지 않았다~~ → ★★ **2026-08-29 — 전량(8페이지 160행) 확인 결과 `스테이지`가 실존한다.** `OP14-039`(관선, `lifeRaw="1"`)가 그 1건이다. **두 페이지 관측에서 "안 나왔다"가 "사이트에 없다"로 조용히 승격되는 것을 §4.8이 스스로 경계했던 자리인데, 정확히 거기서 반례가 나왔다.** `스테이지`를 `life`/`cost` 어느 쪽으로 볼지, invalid 목록에 넣을지는 **여기서 정하지 않는다 — T1.18이 정한다.** 이 마이그레이션은 관측만 남긴다.
+  - ★★ **2026-08-29 — T1.18이 정했다(§4.11 ⓓ-2).** 전량 실측 분포는 **캐릭터 2,475 · 이벤트 368 · 리더 256 · 스테이지 43 · 빈 문자열 4**이고, 판정은 **`리더`→`life` / `캐릭터`·`이벤트`·`스테이지`→`cost` / 그 밖과 빈 문자열→`invalid`**다. 🚨 **빈 문자열 4건은 새로 드러난 것이다**(`OP06-117` · `OP08-067_P2` · `ST04-008` · `ST04-013`) — **스키마 문제가 아니라 「어느 컬럼에 넣을지 모른다」이므로 009를 부르지 않는다.**
 
 **★ 2번에 대해 전제 하나를 정정한다 — 색과 속성은 원천에서 별개 필드다.**
 
@@ -1907,6 +1922,34 @@ data/import-report-<stamp>.json                            # T1.18 (ⓖ)
 | `img.src` | 상대 경로 | `image_url` — 절대화 필요 |
 
 > ⚠️ **`power`의 `-`와 `cardAttr`의 빈 문자열은 다른 표기다.** 원천이 「해당 없음」을 두 가지 방식으로 적는다는 뜻이므로 **둘을 하나로 뭉개지 않는다** — 수집기는 원문 그대로 남기고(ⓚ-2), 정규화가 둘 다 `null`로 만든다(ⓚ-4).
+
+**★★★ 2026-08-29 — 위 표를 전량 실측으로 갱신한다. 관측 범위가 「2세트 35행」에서 「40세트 3,146행」이 됐다.**
+
+> 🚨 **위 표를 지우지 않는다.** 그 표는 **2세트 관측**이고 아래는 **전량**이다. **둘을 겹쳐 보는 것이 「무엇을 얼마나 보고 정했는가」를 남기는 방식이다**(§4.8 ⓙ 머리말). 판정의 전문은 **§4.11**에 있고, 여기에는 **관측만** 적는다.
+
+| 필드 | 2세트 관측(위 표) | **40세트 3,146행 전량** |
+|------|-------------------|--------------------------|
+| `cardType` | `리더`·`캐릭터`·`이벤트`. 「`스테이지`는 미관측」 | 캐릭터 2,475 · 이벤트 368 · 리더 256 · **스테이지 43** · 🚨 **빈 문자열 4** |
+| `rarity` | `L`·`C`·`UC`·`R`·`SR` | **8종** — C 1,026 · UC 475 · R 639 · SR 456 · L 252 · SEC 95 · SP 95 · **P 108** |
+| `animationType` | `오리지널`·`원작` | **4종** — +`애니메이션` 260 · **「그 외」 27** |
+| `cardColor` | 단색 / 2색 | **최대 3색** · 고유 7종 · 🚨 **「다색」이 값으로 들어온다**(`적색,녹색,다색`) |
+| `cardAttr` | 4종 + 빈 문자열 | 특수 806 · 타격 730 · 참격 692 · **지혜 341** · 사격 144 · 빈값 378 · **`-` 35 · `?` 2 · `/` 복합 18행** |
+| `blockNumber` | `2`·`3`·`4` | **`1`도 있다** · **빈 값 35행** |
+| `power` · `cardCounter` | `-` 가능 | `power` `-` **343행** · `counter` `-` **1,164행** · 🚨 **`+1000` 78 · `+2000` 27** · **전각 숫자 10행** · **소수점 표기 6행**(`2.0`·`2000.0`) |
+| `cardPoint` | 슬래시 다치 | 1개 1,607 · 2개 1,320 · 3개 219 |
+| `cardText`·`cardTrigger` | 빈 값 가능 | `effectText` 빈값 187 · `triggerText` 빈값 **2,651/3,146**(정상) |
+| `cardNumber` 접미사 | `_P1`·`_P3` | `_P1` 84 · `_P2` 54 · `_P3` 13 · `_P4` 5 · `_P5` 2 · `_P6` 1 · 🚨 **소문자 `_p1` 10 · `_p2` 2 · `_p3` 1**(대소문자 혼재) |
+| `img.src` | 상대 경로 | **3,146행 전부 `/fileDownload?...` 한 형태.** ⚠️ **「이미지 호스트가 목록과 같다」는 상대 경로에서 나온 추론이고 실제 이미지 요청으로 확인한 것이 아니다**(사용자 일감 6) |
+| `cardGet` | 세트 라벨 | 🚨 **PROMO에서는 세트 라벨이 아니다** — 276행에 고유값 **83개**(「프로모션 팩 2025 Vol.1」 등 **유통 정보**). **세트 판정에 쓰지 않는다**(§4.11 ⓘ-2) |
+
+**★ PROMO에 대한 관측 셋 — T1.25 ⓒ-2의 걸음 1 판독을 뒤집는다.**
+
+> ~~걸음 1(80행) 판독: 「PROMO의 `code`는 **자체 접두사가 아니라** 원본 부스터/스타터 코드를 그대로 쓴다. 80/80이 `_` 접미사를 갖고 `base_code`가 원본과 일치한다」~~
+> ★★ **전량(276행)에서 뒤집혔다.** **`P-***` 자체 접두사가 81건 있다**(접미사 없는 73 + `_` 있는 8). **`base_code`가 다른 세트 카드와 겹치는 것은 163/276이고, 접미사 없는 104행은 0/104다.** 🚨 **걸음 1의 80행(페이지 0~3)에는 `P-` 코드가 0건이었다 — 페이지 순서가 만든 표본 편향이다.**
+
+1. **`P-***` 81건 · `PRB01` · `ST15`~`ST20` 각 5건(총 30) 등 자체·타 계열 접두사가 섞인다.**
+2. 🚨 **`ST15`~`ST20` 접두사에 해당하는 세트 옵션이 원천에 없다**(ⓙ-10 — 스타트 덱은 `STK-01`~`14`·`STK-21`~`28` 22개). **`code` 접두사와 세트 옵션이 1:1이 아니라는 직접 증거**이고, **「접두사로 세트를 추론하지 않는다」의 네 번째 근거다**(§4.11 ⓔ ⓖ).
+3. **세트 간 `code` 중복 3건**(PROMO ↔ STK-25·27·28) — §4.8 ⓕ ★4의 「겹침이 있는지 모른다」가 닫혔다.
 
 #### ⓚ T1.16 구현 계약 — **Developer가 추측 없이 받는 자리** (2026-08-28 확정)
 
@@ -2422,6 +2465,544 @@ resolveSetLabel(options, "PROMO")
 
 **→ `CLAUDE.md` 개정 불필요.** ⚠️ **만약 계열 실행에서 동시성을 2 이상으로 올리거나 세트당 상한을 도입하려는 시도가 나오면, 그것은 `CLAUDE.md` 개정이 선행돼야 하는 변경이다** — 이 절이 아니라 그쪽을 먼저 고쳐야 한다.
 
+### 4.11 카탈로그 임포트 구현 계약 (T1.18 — 2026-08-29 확정)
+
+§4.8 ⓚ가 T1.16에 해 준 것과 같은 자리다 — **Developer가 추측 없이 받는 계약.** 다른 점 둘: ⓐ 이번 대상은 네트워크가 아니라 **DB 쓰기**이고 ⓑ **설계의 전제가 추정이 아니라 전량 실측이다** — `data/catalog/opcg/` **40개 세트 디렉토리 · 3,146행**을 요청 0회로 전수 집계한 결과 위에 서 있다(ⓐ).
+
+> 🚨 **이 절을 쓰는 동안 「표본을 전량으로 착각한 판정」이 세 번 뒤집혔다. 그것 자체를 규율로 남긴다.**
+>
+> | 앞선 판정 | 표본 | 전량(3,146행) 실측 |
+> |---|---|---|
+> | `code` 중복 **0건** | PROMO 80행 시점 | 🚨 **3건**(PROMO ↔ `STK-25`·`STK-27`·`STK-28`) |
+> | PROMO에 자체 접두사 **없음** | PROMO 페이지 0~3(80행) | **있다 — `P-***` 81건** |
+> | `illustrationType` **2종**(→ 3종) | `OPK-14` 160행(→ +`EBK-01`) | **4종**(오리지널 · 원작 · 애니메이션 · 「그 외」) |
+>
+> **셋 다 §4.4.1이 미끄러진 것과 똑같은 형태다** — 「본 범위에서 없었다」가 「없다」로 승격됐다. **§4.8 ⓙ가 「관측 범위를 판정과 같은 칸에 적는다」고 규율을 세웠는데도 한 세션에 세 번 재현됐다.** 그래서 이 절의 모든 실측값에는 **집계 대상(3,146행 / 40세트)을 명시**하고, **그래도 이것이 「원천 전체」가 아니라 「우리가 받은 41개 옵션 중 40개」라는 것**을 함께 적는다.
+
+#### ⓐ 전제 — 무엇을 보고 설계했는가 (2026-08-29 · 요청 0회 전수 집계)
+
+**무결성(전량):** 세트 디렉토리 **40개** · 총 **3,146행** · **전 행이 정확히 17필드** · 파일 내 `code` 중복 **0** · CSS·스크립트 오염 **0행** · `imagePath`가 3,146행 전부 `/fileDownload?...` **한 형태**.
+
+| 실측 | 값 | T1.18에 대한 뜻 |
+|------|-----|-----------------|
+| 🚨 **세트 간 `code` 중복** | **3건.** `OP09-089_P1`(PROMO·STK-27) · `OP06-110_P1`(PROMO·STK-28) · `OP09-043_P1`(PROMO·STK-25) | **`cards`의 `unique (game_id, code)`가 실제로 충돌한다.** → §4.8 ⓕ ★4의 적재 순서 규칙은 **살아 있다**(ⓗ-4) |
+| **PROMO 규모** | **276행** · 14페이지 전량 · 고유 `sourceSetLabel` **83개** | `sourceSetLabel`은 세트 라벨이 아니라 **행마다 다른 유통 정보**다 → 세트 판정에 쓰지 않는다(ⓓ) |
+| **PROMO 자체 접두사** | `P-***` **81건**(접미사 없는 73 + `_` 있는 8) · `PRB01` · `ST15`~`ST20` 각 5건 | **원본 세트에 귀속시키는 안이 성립하지 않는다는 직접 증거** → 사용자 결정 4c의 근거 셋째·넷째(ⓔ) |
+| **`base_code` 겹침** | PROMO 276행 중 **163행**만 다른 세트 카드와 겹친다. 접미사 없는 104행은 **0/104** | §4.6 대체 카드 판정은 163행에서 성립하고 **104행은 애초에 귀속시킬 원본이 없다** |
+| **접미사 대소문자 혼재** | `_P1` 84 · `_P2` 54 · `_P3` 13 · `_P4` 5 · `_P5` 2 · `_P6` 1 · **`_p1` 10 · `_p2` 2 · `_p3` 1** | `base_code`(`split_part`)는 무관하다. **그러나 `code` 비교·정렬·중복 판정에서 대소문자를 가정하면 틀린다**(ⓗ-6) |
+| **`cardType` 분포** | 캐릭터 2,475 · 이벤트 368 · 리더 256 · **스테이지 43** · **빈 문자열 4** | `스테이지`는 관측이 됐다(ⓓ-2). **빈 문자열 4건이 새 판정을 요구한다**(ⓓ-3) |
+| **`rarity` 8종** | C 1,026 · UC 475 · R 639 · SR 456 · L 252 · SEC 95 · SP 95 · **P 108** | 원문 그대로 저장. **좁히는 코드를 만들지 않는다** |
+| **`illustrationType` 4종** | 오리지널 2,326 · 원작 533 · 애니메이션 260 · **「그 외」 27** | §4.8 ⓗ #6의 「둘뿐」이 **뒤집혔다**. 원문 저장이 옳았다는 증거 |
+| **`colorRaw`** | 최대 **3개** · 구분자 `,` · 고유 7종(적·녹·청·자·황·흑 + **「다색」**) | 🚨 **「다색」이 색 목록 안에 값으로 들어온다**(ⓓ-4) |
+| **`attribute`** | 특수 806 · 타격 730 · 참격 692 · 지혜 341 · 사격 144 · 빈값 378 · **`-` 35 · `?` 2 · `/` 복합 18행** | **단일 값이 아니다**(ⓓ-5) |
+| **`traitsRaw`** | `/`로 1~3개 (1개 1,607 · 2개 1,320 · 3개 219) | 기존 판정 그대로 |
+| **`blockNumberRaw`** | 빈 값 **35행** · 값에 **`1`**도 있다(`ST04-008`) | §4.8 ⓗ #7의 「`2`·`3`·`4`뿐」도 표본이었다 |
+| **빈 값이 정상인 칸** | `effectText` 187행 · `triggerText` **2,651/3,146** | **빈 값을 결측으로 세지 않는다** |
+| 🚨 **수치 칸 표기 4종** | 전각 숫자 10행 · 소수점 `2.0`·`2000.0` 6행 · `-`(power 343 · counter 1,164) · **부호 `+1000` 78 · `+2000` 27** | **현행 `parseNumericField`의 `/^\d+$/`가 121행을 `invalid`로 만든다**(ⓕ) |
+
+> ⚠️ **이 집계가 답하지 **못한** 것 — 열어 둔다.** ⓐ 원본 화면과의 행 단위 대조는 세트당 1행 표본뿐이다(T1.25 ⓔ) ⓑ **`imagePath`가 전부 상대 경로 한 형태라는 것에서 「이미지 호스트가 목록과 같다」가 따라 나오지만, 그것은 상대 경로에서 나온 추론이고 실제 이미지 요청으로 확인한 것이 아니다**(사용자 일감 6) ⓒ `code`·`rarity`·`attribute`의 값 도메인은 **40세트 안에서의 전량**이지 원천 전체가 아니다 — 새 세트가 나오면 다시 늘어난다.
+
+#### ⓑ 모듈 경계 — 판단은 `src/lib/catalog/`, `scripts/`는 배선
+
+🚨 **이 경계를 어겨 T1.16에서 결함 5건이 났다**(로드맵 T1.16 블록 — 상한 우회 · 조용한 완주 · 지연 누락 · 사유 오분류 · `failureCount` 오집계). **다섯 전부 「판단이 `scripts/`에 있어서 `vitest`의 `include`(`src/**`)에 걸리지 않은 자리」였다.** T1.18은 같은 경계를 따르고, **특히 집계를 `scripts/`에 두지 않는다**(§8 T1.16 블록이 「T1.18의 리포트 집계가 정확히 같은 모양이라 같은 실수가 반복될 수 있다」고 미리 경고한 자리다).
+
+```
+src/lib/catalog/
+├── normalize.ts     # NormalizedCard → CardRowDraft   ★ 순수. life/cost 분배 · invalid 판정
+├── plan.ts          # 기존 DB 행 + draft → ImportPlan  ★ 순수. 5분류
+├── report.ts        # ImportPlan(+적재 결과) → 리포트  ★ 순수. 🚨 집계는 전부 여기
+└── gate.ts          # --apply 관문 넷의 판정            ★ 순수. 파일 시스템을 모른다
+src/lib/validation/catalog.ts   # 기존 파일에 가산 — 수치 표기 4종(ⓕ)
+scripts/import-catalog.ts       # 배선만
+```
+
+| 파일 | 하는 일 | **하지 않는 일** (이 칸이 계약의 본체다) |
+|------|---------|------------------------------------------|
+| `normalize.ts` | `NormalizedCard` 1건 → `CardRowDraft` 또는 `invalid`. `cardType`으로 `life`/`cost`를 가른다 | **DB를 모른다.** `set_id`·`game_id`·`id`를 채우지 않는다 — 그 셋은 `plan.ts`가 받는 조회 결과다. **네트워크·파일 I/O 0건** |
+| `plan.ts` | 분류 5종 + 컬럼별 `before → after` 계산 + 세트/게임 부재 판정 | **조회하지 않는다.** 기존 행 목록을 **인자로 받는다**(§4.8 ⓘ가 「그러면 분류기가 순수 함수가 된다」고 이미 적었다) |
+| `report.ts` | 🚨 **세는 일 전부** — 건수 · 접두사 불일치 비율 · 결론 한 줄 · 화면 문자열 조립 · 리포트 객체 | **찍지 않는다.** `console.log`를 부르지 않고 **문자열을 돌려준다**. 파일도 쓰지 않는다 |
+| `gate.ts` | 관문 넷의 **판정**(덤프 신선도 · 리포트 해시 대조 · 게임/세트 실재 · `--apply` 유무) | **읽지 않는다.** `fs`를 import 하지 않는다 — mtime·크기·해시를 **값으로 받는다**. 이래야 「24시간 경계」를 시계 없이 테스트할 수 있다 |
+| `scripts/import-catalog.ts` | argv 파싱 · JSONL 읽기 · sha256 계산 · `backups/` 훑기 · Supabase 조회/쓰기 · 리포트 파일 쓰기 · `console.log` · 종료 코드 | **판단하지 않는다.** 「멈출지」·「몇 건인지」·「무엇이 바뀌는지」를 스스로 정하지 않고 위 넷에 묻는다 |
+
+**`npm run catalog:import`을 `package.json`에 추가한다** — §4.8 ⓒ가 이미 정한 형태 그대로(`"catalog:import": "tsx --env-file=.env.local scripts/import-catalog.ts"`). **현재 `package.json`에는 `catalog:collect`만 있다**(확인함).
+
+> **`src/app/**`의 `no-restricted-imports`(§4.8 ⓒ ★)는 그대로 적용된다.** 새 파일 넷도 `@/lib/catalog/*`이므로 자동으로 덮인다 — 규칙을 고칠 필요가 없다. ⚠️ **넷 중 `jsdom`을 쓰는 파일은 하나도 없지만 예외를 만들지 않는다.** 예외를 파일 단위로 파기 시작하면 규칙이 목록 관리가 된다.
+
+#### ⓒ 공개 함수 시그니처
+
+```ts
+// ── src/lib/catalog/normalize.ts ─────────────────────────────────────────
+/** `cards` Insert에 그대로 실릴 값. 🚨 DB가 채우는 것(id·created_at·updated_at·
+ *  base_code)과 임포터가 절대 쓰지 않는 것(image_url)은 이 타입에 없다. */
+export interface CardRowDraft {
+  readonly code: string;
+  readonly name_ko: string | null;
+  readonly name_ja: null;               // ★ 타입이 `null` 리터럴이다 — 값을 넣을 수 없다(ⓚ-1)
+  readonly card_type: string;
+  readonly colors: readonly string[] | null;
+  readonly life: number | null;
+  readonly cost: number | null;
+  readonly power: number | null;
+  readonly counter: number | null;
+  readonly attribute: string | null;
+  readonly traits: readonly string[] | null;
+  readonly rarity: string | null;
+  readonly effect_text: string | null;
+  readonly trigger_text: string | null;
+  readonly illustration_type: string | null;
+  readonly block_number: number | null;
+  readonly source_image_url: string;
+}
+
+export type NormalizeIssueReason =
+  | "code_empty"            // code가 비었거나 공백을 포함한다
+  | "no_name"               // name_ko도 name_ja도 없다 (§4.8 ⓕ ★★ · 008의 check 제약)
+  | "card_type_empty"       // 🚨 실측 4건 (ⓓ-3)
+  | "card_type_unknown"     // 알려진 4종 밖 (ⓓ-2)
+  | "non_numeric";          // 알려진 표기 밖의 수치 문자열 (ⓕ)
+
+export interface NormalizeIssue {
+  readonly field: string;          // "code" | "cardType" | "power" | ...
+  readonly reason: NormalizeIssueReason;
+  readonly raw: string;            // 🚨 원문. 어떤 경우에도 비우지 않는다
+}
+
+export type NormalizeResult =
+  | { readonly ok: true;  readonly row: CardRowDraft; readonly warnings: readonly NormalizeIssue[] }
+  | { readonly ok: false; readonly issues: readonly NormalizeIssue[] };
+
+export function normalizeCard(card: NormalizedCard): NormalizeResult;
+
+/** 🚨 life/cost 분배. 이 함수 하나가 §4.8 ⓗ #8이 T1.18에 넘긴 판정의 전부다. */
+export const LIFE_CARD_TYPES = ["리더"] as const;
+export const COST_CARD_TYPES = ["캐릭터", "이벤트", "스테이지"] as const;
+export function distributeLifeCost(
+  cardType: string,
+  life: NumericField,
+): { readonly life: number | null; readonly cost: number | null } | NormalizeIssue;
+
+// ── src/lib/catalog/plan.ts ──────────────────────────────────────────────
+/** DB에서 읽어 온 기존 행. 🚨 `plan.ts`는 이것을 **인자로 받는다** — 조회하지 않는다. */
+export interface ExistingCardRow {
+  readonly code: string;
+  readonly set_id: string | null;
+  readonly values: Readonly<Partial<Record<UpdatableColumn, unknown>>>;  // 화이트리스트 컬럼의 현재 값
+}
+
+export type UpdatableColumn =
+  | "name_ko" | "name_en" | "rarity" | "attribute" | "card_type" | "sub_type"
+  | "effect_text" | "colors" | "life" | "cost" | "power" | "counter"
+  | "traits" | "trigger_text" | "illustration_type" | "block_number" | "source_image_url";
+// 🚨 `image_url`은 없다(§8 T1.18 ⓕ ★★) · `name_ja`·`code`·`game_id`·`set_id`도 없다(§4.8 ⓕ)
+
+export type RowVerdict = "insert" | "skip:same_set" | "skip:other_set" | "update" | "invalid";
+
+export interface ColumnChange { readonly column: UpdatableColumn; readonly before: unknown; readonly after: unknown }
+
+export interface PlannedRow {
+  readonly code: string;
+  readonly verdict: RowVerdict;
+  readonly row: CardRowDraft | null;              // invalid면 null
+  readonly changes: readonly ColumnChange[];      // update일 때만 비지 않는다
+  readonly issues: readonly NormalizeIssue[];
+  readonly existingSetId: string | null;          // skip:other_set의 「기존 세트」
+  readonly prefixMismatch: boolean;               // code 접두사가 --set과 어긋난다
+}
+
+export type ImportConclusion =
+  | { readonly ok: true;  readonly counts: ImportCounts }
+  | { readonly ok: false; readonly reason: BlockReason };
+
+export type BlockReason =
+  | "set_not_found" | "game_not_found" | "duplicate_code_in_file" | "empty_file" | "schema_mismatch";
+
+export interface BuildImportPlanInput {
+  readonly game: { readonly code: string; readonly id: string } | null;   // null = 조회 실패
+  readonly set:  { readonly code: string; readonly id: string } | null;   // null = card_sets에 없다
+  readonly cards: readonly NormalizedCard[];      // 중간 파일 전량 (파싱 완료)
+  readonly existing: readonly ExistingCardRow[];  // 같은 game_id에서 code로 조회한 결과
+  readonly mode: "insert-only" | "update";
+}
+
+export function buildImportPlan(input: BuildImportPlanInput): ImportPlan;
+
+export interface ImportPlan {
+  readonly rows: readonly PlannedRow[];
+  readonly conclusion: ImportConclusion;
+}
+
+// ── src/lib/catalog/report.ts ────────────────────────────────────────────
+export interface ImportCounts {
+  readonly total: number;
+  readonly insert: number;
+  readonly skipSameSet: number;
+  readonly skipOtherSet: number;     // ★ 합치지 않는다(§4.8 ⓕ ★4)
+  readonly update: number;
+  readonly invalid: number;
+}
+
+export interface PrefixMismatchSummary {
+  readonly mismatched: number; readonly total: number; readonly ratio: number;
+  readonly kind: "silent" | "suspect" | "reprint_set";   // r=0 / 0<r<100 / r=100
+}
+
+export interface ImportReport {
+  readonly schemaVersion: 1;
+  readonly generatedAt: string;
+  readonly input: { readonly file: string; readonly sha256: string; readonly collectedAt: string | null;
+                    readonly rowCount: number; readonly game: string; readonly set: string };
+  readonly target: { readonly host: string; readonly mode: "insert-only" | "update"; readonly applied: boolean };
+  readonly mapping: { readonly gameId: string | null; readonly setId: string | null };
+  readonly counts: ImportCounts;
+  readonly prefix: PrefixMismatchSummary;
+  readonly otherSetRows: readonly { code: string; existingSetId: string; targetSetId: string }[];
+  readonly invalidRows: readonly { code: string; issues: readonly NormalizeIssue[] }[];
+  readonly updates: readonly { code: string; changes: readonly ColumnChange[] }[];
+  readonly samples: readonly CardRowDraft[];      // insert 앞 5건 전문
+  readonly conclusion: ImportConclusion;
+  readonly apply: ApplyOutcome | null;            // 드라이런이면 null
+}
+
+export function summarizePlan(plan: ImportPlan, meta: ReportMeta): ImportReport;
+export function renderReport(report: ImportReport): string;   // 🚨 문자열을 돌려준다. 찍지 않는다
+export function shouldAbortApply(consecutiveFailures: number): boolean;  // ≥ 10 (§4.8 ⓕ)
+export const CONSECUTIVE_FAILURE_LIMIT = 10;
+
+export interface ApplyOutcome {
+  readonly attempted: number; readonly succeeded: number;
+  readonly failed: readonly { readonly code: string; readonly pgCode: string | null; readonly message: string }[];
+  readonly raced: readonly string[];    // 23505 — 계획 뒤 다른 경로가 먼저 넣었다(ⓗ-5)
+  readonly stoppedBy: "completed" | "consecutive_failures";
+}
+
+// ── src/lib/catalog/gate.ts ──────────────────────────────────────────────
+export const DUMP_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+export const DUMP_FILE_PATTERN = /^catalog-\d{8}-\d{6}\.sql$/;
+
+export interface DumpFileFact { readonly name: string; readonly mtimeMs: number; readonly sizeBytes: number }
+/** 🚨 이름 패턴 + 크기>0을 통과한 것 중 **mtime이 가장 큰 것**. 이름의 시각을 믿지 않는다(ⓖ). */
+export function pickLatestDump(files: readonly DumpFileFact[]): DumpFileFact | null;
+
+export interface ApplyGateInput {
+  readonly apply: boolean;
+  readonly now: number;
+  readonly dump: DumpFileFact | null;
+  readonly fromReport: { readonly inputSha256: string; readonly game: string; readonly set: string;
+                         readonly mode: string; readonly conclusionOk: boolean } | null;
+  readonly current: { readonly sha256: string; readonly game: string; readonly set: string; readonly mode: string };
+  readonly conclusion: ImportConclusion;
+}
+export type GateFailure = { readonly gate: 1 | 2 | 3 | 4; readonly reason: string };
+/** 빈 배열이면 통과. 🚨 첫 실패에서 멈추지 않고 **넷을 전부 판정해 모아 돌려준다**(ⓖ). */
+export function checkApplyGates(input: ApplyGateInput): readonly GateFailure[];
+```
+
+#### ⓓ JSONL 17필드 → `cards` 컬럼 매핑
+
+**대조 대상은 마이그레이션 008 적용 후의 실제 스키마다**(`src/types/database.ts` · `supabase/migrations/20260829000008_card_performance_columns.sql`을 직접 읽고 대조했다).
+
+| # | JSONL 필드 | `cards` 컬럼 | 변환 | 실측(3,146행) · 근거 |
+|---|-----------|--------------|------|----------------------|
+| 1 | `code` | **`code`** | trim. **대소문자 원문 보존** | 🚨 `base_code`는 **생성 컬럼**(005)이라 **쓰지 않는다.** 쓰면 `428C`로 거절된다 |
+| 2 | `nameKo` | **`name_ko`** | 빈 문자열 → `null` | `name_ko`는 nullable(002) |
+| — | (없음) | **`name_ja`** | **항상 `null`** | §4.8 ⓕ ★★. **타입이 `null` 리터럴이라 값을 넣는 코드가 컴파일되지 않는다** |
+| 3 | `cardType` | **`card_type`** | 원문 그대로 | 4종 + **빈 문자열 4건 → `invalid`**(ⓓ-3) |
+| 4 | `colorRaw` | **`colors text[]`** | `,` split · trim · 빈 항목 제거 | 최대 3개. **「다색」도 원소로 넣는다**(ⓓ-4) |
+| 5 | `lifeRaw` | **`life` 또는 `cost`** | `cardType`으로 분배(ⓓ-2) | §4.8 ⓗ #8이 T1.18에 넘긴 판정 |
+| 6 | `powerRaw` | **`power`** | 수치 정규화(ⓕ) | `-` 343행 → `null` |
+| 7 | `counterRaw` | **`counter`** | 수치 정규화 + **`+` 접두 제거** | `-` 1,164행 → `null` · `+1000`/`+2000` 105행 |
+| 8 | `attribute` | **`attribute`** | trim. `""`·`-` → `null`. **`?`와 `/` 복합값은 원문 그대로**(ⓓ-5) | 빈값 378 · `-` 35 · `?` 2 · 복합 18 |
+| 9 | `traitsRaw` | **`traits text[]`** | `/` split · trim · 빈 항목 제거 | 1~3개 |
+| 10 | `rarity` | **`rarity`** | trim. `""` → `null` | 8종(P 108 포함) |
+| 11 | `effectText` | **`effect_text`** | 이미 `\n` 정규화됨. `""` → `null` | 빈값 187행 = 정상 |
+| 12 | `triggerText` | **`trigger_text`** | 같음 | 빈값 2,651행 = 정상 |
+| 13 | `illustrationType` | **`illustration_type`** | 원문 그대로 | **4종** |
+| 14 | `blockNumberRaw` | **`block_number`** | 수치 정규화 | 빈값 35행 → `null` · `1`도 있다 |
+| 15 | `imagePath` | 🚨 **`source_image_url`** | `new URL(path, CATALOG_ORIGIN)` (`validation/catalog.ts`가 이미 한다) | 🚨 **`image_url`이 아니다.** 임포터는 `image_url`을 **읽지도 쓰지도 않는다**(§8 T1.18 ⓕ ★★ — 두 스크립트가 같은 컬럼을 쓰면 재실행이 자체 호스팅 경로를 원천 URL로 되돌린다) |
+| 16 | ❌ **`sourceSetLabel`** | **매핑 없음** | 버린다 — 단 **리포트에 고유값 목록을 찍는다**(ⓓ-6) | PROMO 276행에 고유값 **83개**. **세트 판정에 쓰면 안 된다** |
+| 17 | ❌ **`page`** | **매핑 없음** | 버린다 | 중간 파일의 재수집 skip 판정 전용(§4.8 ⓚ-2) |
+
+**임포터가 채우지 않는 `cards` 컬럼과 그 이유.** `id`·`created_at`·`updated_at`(DB 기본값 · `cards_touch_updated_at` 트리거) · `base_code`(생성 컬럼) · `name_ja`(위) · `name_en`(원천에 없다) · `sub_type`(§4.0이 `basic_energy` 판정 전용으로 못박았고 원피스에는 해당 값이 없다 — **`traits`를 여기 넣지 않는다**) · `image_url`(T1.22) · `search_vector`(트리거). **`game_id`·`set_id`는 조회 결과로 채운다**(ⓔ).
+
+**ⓓ-1 `card_keywords`를 건드리지 않는다.** §4.8 ⓕ가 「1차 적재에서는 키워드 태깅을 하지 않는다 — 원천이 우리 `keywords` 코드 체계를 모른다」고 이미 정했다. **T1.18은 `card_keywords`에 0행을 쓴다.** 그러면 §4.8 ⓕ의 「키워드 연결 실패 → 카드를 되돌린다」 조항은 **T1.18에서 발동할 경로가 없다** — 조항을 지우지 않고 **「관리자 폼 경로에만 남는다」로 범위를 적어 둔다.**
+
+**ⓓ-2 🚨 `life`/`cost` 분배 — 이것이 §4.8 ⓗ #8이 T1.18에 넘긴 판정이다.**
+
+| `cardType` | 어느 컬럼 | 근거 |
+|---|---|---|
+| **`리더`** (256행) | **`life`** | 실측: 리더의 `lifeRaw`는 4·5뿐(OPK-14) |
+| **`캐릭터`**(2,475) · **`이벤트`**(368) · **`스테이지`**(43) | **`cost`** | ⚠️ **`스테이지`를 `cost`로 보는 것은 「원피스에서 스테이지는 코스트를 지불해 낸다」는 게임 지식이 아니라 관측으로 지지된다** — 43행의 `lifeRaw` 값이 리더의 4·5가 아니라 코스트 범위 안에 있고(`ST04` 관측 `1`), **`스테이지`에 라이프를 주는 원천 표기가 하나도 없다.** 🚨 **그래도 이것은 「우리가 고른 배치」이므로 되돌릴 수 있게 적어 둔다 — 틀렸다면 `UPDATE cards SET life=cost, cost=null WHERE card_type='스테이지'` 한 문이다** |
+| **그 밖의 값** | ❌ **`invalid`** | §4.8 ⓗ의 🚨 그대로. **조용히 둘 다 null로 두지 않는다.** 목록을 「리더가 아니면 전부 cost」로 열지 않는 이유: **새 카드 종류가 나오는 날 그것이 조용히 코스트로 들어간다** |
+| **빈 문자열**(4행) | ❌ **`invalid`** | ⓓ-3 |
+
+**ⓓ-3 🚨 `cardType`이 빈 문자열인 4행 — `invalid`로 판정한다. 스키마를 바꾸지 않는다.**
+
+실측 4건: `OPK-06 OP06-117`(방주 맥심) · `PROMO OP08-067_P2`(샬롯 푸딩) · `STK-04 ST04-008`(잭) · `STK-04 ST04-013`(X 드레이크). **원본 행의 나머지 16필드는 온전하다**(직접 확인: `ST04-008`은 `powerRaw:"4000"`·`counterRaw:"1000"`·`lifeRaw:"2"` — 즉 **파싱 실패가 아니라 원천의 결측이다**).
+
+| 후보 | 판정 |
+|------|------|
+| **`invalid`로 빼고 리포트에 원문을 찍는다** | ✅ **채택.** 4/3,146 = **0.13%**이고 **카드 이름까지 특정돼 있어 사람이 `/admin/cards`에서 4장을 손으로 넣을 수 있다**(T1.12-2가 이미 있다). **그리고 `lifeRaw`를 어느 컬럼에 넣을지 정할 근거가 없다는 사실이 그대로 보인다** |
+| `card_type`을 `null`로 넣고 `life`·`cost`를 둘 다 null로 | ❌ **조용한 손실이다.** 화면은 정상으로 보이고 **덱 빌더의 코스트 커브에서만 4장이 사라진다** — §0.1 ⓓ 위험 4번의 모양 그대로 |
+| `powerRaw`가 있으니 `캐릭터`로 추론 | ❌ **추론이다.** 이 문서가 반복해서 금지한 것이고, `ST04-013`(X 드레이크)가 실제로 캐릭터일 가능성이 높다는 것은 **우리 게임 지식이지 원천의 값이 아니다** |
+| 마이그레이션 009로 `card_type`을 손본다 | ❌ **손볼 것이 없다** — `card_type`은 이미 nullable이다. **문제는 스키마가 아니라 「어느 컬럼에 넣을지 모른다」다** |
+
+**ⓓ-4 🚨 `colors`에 「다색」이 값으로 들어온다 — 원문 그대로 넣고, 해석은 T2.5에 넘긴다.**
+
+실측: `EBK-01`에 `"적색,녹색,다색"`. **「다색」은 색이 아니라 색이 여럿이라는 표식으로 보이지만 그것은 우리 해석이다.** §4.8 ⓚ-4가 「색 이름을 코드로 번역하지 않는다 — 번역표를 두면 새 색이 나오는 날 조용히 떨어진다」고 정한 것과 **같은 자리**다. → **`colors`에 `["적색","녹색","다색"]`을 그대로 넣고**, 리포트에 **「`colors`에 「다색」을 포함한 N행」**을 한 줄 찍는다. ⚠️ **T2.5 어댑터(§4.7 ⓕ `leader_color_mismatch`)에 조건이 하나 생긴다 — 「다색」을 색으로 비교하면 리더 색 검증이 틀린다.** **그 판정은 T2.5의 몫이고 여기서 정하지 않는다.** T1.18은 **재료를 잃지 않는 쪽**을 고른다.
+
+**ⓓ-5 `attribute`가 단일 값이 아니다 — 원문 저장을 유지하고 009 후보로 세운다.**
+
+`참격/특수` 같은 `/` 복합값이 **18행**. `cards.attribute`는 단일 `text`다. **지금 배열로 바꾸지 않는다** — ⓐ T1.18의 완료 기준이 **마이그레이션 0건**이고 ⓑ 배열로 바꾸면 `/api/cards/facets`(§5.1)과 `search_cards`(004)를 함께 고쳐야 해서 **백로그 C 전체가 딸려 온다**(§4.8 ⓗ가 같은 이유로 그은 선). **→ `"참격/특수"`를 문자열 그대로 넣고 리포트에 18행을 찍는다.** ⚠️ **대가를 명시한다: 도감의 속성 패싯에 「참격/특수」가 별도 항목으로 뜬다.** 그것이 화면에서 실제로 거슬리는지는 **T1.19 이후에 사람이 보고 판단한다**(B-4·B-5와 같은 시점). **009 후보 ①**로 세운다.
+
+- `-`(35행)·빈값(378행) → `null`. **`-`는 원천의 「해당 없음」 표기로 다른 필드에서 이미 확인된 형태다**(§4.8 ⓚ-4).
+- 🚨 **`?`(2행)는 `null`로 만들지 않는다. 문자열 `"?"`를 그대로 넣는다.** 근거: **`-`와 달리 `?`가 「없음」이라는 선례가 원천에 없다.** 「모르겠다는 뜻이겠지」가 곧 추론이다. **원문을 남기면 나중에 무엇이든 할 수 있고, `null`로 만들면 두 상태가 영원히 구분되지 않는다.**
+
+**ⓓ-6 `sourceSetLabel`(PROMO 유통 정보) — 컬럼을 만들지 않는다. 대신 리포트가 받는다.**
+
+PROMO 276행의 고유값 **83개**(「【프로모션】 프로모션 팩 2025 Vol.1」 · 「【프로모션】 플래그쉽 배틀 상위 입상 기념품 2025년 8~9월」 등). **이것은 세트가 아니라 「어떻게 배포됐는가」다.**
+
+| 후보 | 판정 |
+|------|------|
+| **버리되 리포트에 고유값 목록을 남긴다** | ✅ **채택.** ⓐ §4.1 `search_vector`의 교훈 — **읽는 곳이 없는 구조를 미리 만들지 않는다.** 이 값을 보여 줄 화면 요구가 아직 없다 ⓑ 🚨 **버려도 잃지 않는다 — 원천 기록은 JSONL이고 그 파일은 그대로 있다.** 필요해지는 날 컬럼을 만들고 **요청 0회로** 다시 채울 수 있다. **이것이 2단 파이프라인(수집 → 파일 → 적재)이 실제로 값을 주는 자리다** |
+| 009로 `cards.distribution_note text`를 만든다 | ⏸ **009 후보 ②로 세우되 지금 열지 않는다.** T1.18의 완료 기준이 마이그레이션 0건이고, **이 값이 없다고 막히는 것이 없다** |
+
+#### ⓔ `card_sets` 행을 누가 만드는가 — **사람이 미리 만든다. 임포터는 upsert하지 않는다. PROMO도 예외가 아니다**
+
+**§4.8 ⓕ의 「세트 매핑 부재 → 자동 생성하지 않는다」를 그대로 유지한다.** 근거가 그때보다 강해졌다(아래). 임포터는 `--set <code>`로 `card_sets`를 **조회만** 하고, 없으면 드라이런 결론이 **「적재 불가: set_not_found」**이며 `--apply`는 관문 4에서 거부된다.
+
+**★ 사용자 결정 (2026-08-29) — PROMO는 별도 `card_sets` 행이다.** 사용자 일감 4c가 이 결정으로 닫혔다. PROMO 카드의 `set_id`는 **PROMO 세트 행**을 가리키고 원본 부스터/스타터 세트에 귀속시키지 않는다. **그 결과 임포터는 `code` 접두사 → 세트 코드 매핑 규칙을 만들지 않는다 — 파일이 곧 세트다**(`data/catalog/opcg/<SET>/cards.jsonl`의 디렉토리명이 세트 코드다).
+
+| # | 사용자가 이 안을 고른 근거 |
+|---|---------------------------|
+| ⓐ | **원천의 `【프로모션】` 목록과 1:1로 대응한다** — 셀렉터 옵션 41개 중 하나가 그대로 한 세트가 된다 |
+| ⓑ | **원본과의 연결은 이미 `base_code`가 한다**(§4.6). `set_id`로 또 잇는 것은 중복 설계다 |
+| ⓒ | **`/sets/[setId]`(§4.9 T2.13)에서 「세트 = 실제로 뜯을 수 있는 것」의 의미가 지켜진다** |
+| ⓓ | **접두사 매핑은 관측이 아니라 추론이고**, 8개 계열만 본 상태에서 만든 규칙이라 **§4.4.1이 미끄러진 형태와 같다** |
+| ⓔ | **되돌리기가 싸다** — `set_id` 한 컬럼 UPDATE다 |
+| ★ ⓕ | 🚨 **실측이 「원본 귀속」 안을 아예 성립 불가로 만들었다 (2026-08-29 전량 집계).** PROMO 276행 중 **접미사 없는 104행은 `base_code`가 어떤 세트 카드와도 겹치지 않는다**(0/104). 그중 **`P-***` 73장은 귀속시킬 원본 세트가 존재하지 않는다.** **결정이 내려진 뒤에 나온 근거이고, 결정을 뒤집는 대신 강화한다** |
+| ★ ⓖ | 🚨 **`code` 접두사와 세트 옵션이 1:1이 아니라는 직접 증거가 나왔다.** PROMO 안에 **`ST15`~`ST20` 접두사 코드가 각 5건(총 30건)** 있는데 **그 접두사에 해당하는 세트 옵션이 원천에 없다**(§4.8 ⓙ-10 — 스타트 덱은 `STK-01`~`14`·`STK-21`~`28` 22개뿐). **접두사로 세트를 추론했다면 이 30행이 존재하지 않는 세트를 가리켰을 것이다** |
+
+> ⚠️ **부수 관측 — 카탈로그 커버리지에 구멍이 하나 있다. T1.18을 막지 않는다.** `ST15`~`ST20` 스타터 덱의 카드는 **프로모 경로로 30장만** 우리 카탈로그에 들어온다. **원천이 그 세트 옵션을 주지 않으므로 우리가 메울 수 없다** — **백로그 후보로만 적고 넘어간다**(백로그 A-7).
+
+**🚨 그런데 이 결정이 T1.19에서 막힌다 — `card_sets.name_ja`가 `not null`이다. 009 후보 ③이고, 사용자 일감이다.**
+
+- **확인한 사실:** 마이그레이션 003이 `card_sets.name_ja`를 `not null`로, `name_ko`를 nullable로 바꿨다(근거는 당시 주 원천이 TCGdex였다는 것). `src/lib/validation/admin.ts`의 `setInputSchema`도 `name_ja: required("일본어 세트명")`다.
+- **결과:** 40~41개 세트 행을 만들려면 **사람이 세트마다 일본어명을 적어야 하는데 우리 원천은 한국어 라벨만 준다**(`[OPK-14] 부스터 팩 창해의 칠걸`). 🚨 **그러면 사람이 한국어 라벨을 `name_ja` 칸에 붙여 넣게 되고, 그것이 §4.8 ⓕ가 `cards.name_ja`에 대해 막은 오염과 정확히 같은 형태다.**
+- ⚠️ **위험의 크기는 다르다** — `card_sets.name_ja`는 §5.3 매물 크롤러의 검색 키가 **아니다**(그건 `cards.name_ja`다). 그래서 **T1.18을 막지 않고 T1.19를 막는다.**
+- **→ 판정: 009에서 `card_sets`에도 008과 같은 처리를 한다** — `alter column name_ja drop not null` + `check (name_ko is not null or name_ja is not null)` + `setInputSchema` 동기화. **T1.18의 범위가 아니다**(완료 기준이 마이그레이션 0건이다). **사용자 일감으로 세운다.**
+- ★★ **2026-08-29 — 사용자 승인(일감 4d) 뒤 같은 날 009까지 나왔다. 이 판정은 소진됐다.**
+  - **`supabase/migrations/20260829000009_card_set_name_nullability.sql`** — `card_sets.name_ja drop not null` + `card_sets_name_present_ck`. **008의 `cards_name_present_ck`와 같은 모양이다.**
+  - **`setInputSchema`**(`src/lib/validation/admin.ts`) — `name_ja: required` → `optional` + object-level `.refine()`(「둘 중 최소 하나」). **`cardInputSchema`가 T1.17에서 받은 것과 같은 처리다.**
+  - 🚨 **타입이 nullable로 넓어지면서 앱 쪽 세 자리가 함께 움직였다 — 이것이 이 마이그레이션의 실제 비용이었다.** `SetOption`·`AdminSetDetail`의 `name_ja: string` → `string | null` · `fetchSets`의 `select`에 `name_ko` 추가 · **`setDisplayName`(`src/types/admin.ts`) 신설**. **`cardDisplayName`과 같은 자리의 함수이되 떨어지는 값이 다르다 — 카드는 빈 문자열, 세트는 `code`다**(세트는 `code`가 `not null`이고 그것이 사람이 읽는 식별자다). 표기 자리 3곳(`card-form` 드롭다운 · `/admin/sets` 목록 · `/api/cards/facets`)이 이 함수로 모였다.
+  - **로컬 리허설:** `db:reset`으로 001~009 전부 적용 → 한국어 세트명만 있는 행 **통과** · 둘 다 null인 행 **거부**(테스트 행 정리 확인). `db:types` 재생성. **테스트 268 → 273 · lint · typecheck 통과.**
+  - ⚠️ **원격은 아직 009 이전이다.** `src/types/database.ts`는 **로컬(009 이후)** 기준으로 뽑혀 있다 — 백로그 E-1이 경계한 어긋남이 지금 열려 있다는 뜻이다. **그 창은 「사용자가 `npm run db:migrate`를 돌릴 때까지」이고, 그 사이 원격에 쓰는 코드는 0건이다**(적재는 T1.19). **사용자 일감 4f.**
+
+#### ⓕ 수치 표기 4종 — `validation/catalog.ts`를 **넓힌다.** 규칙을 바꾸는 것이 아니다
+
+현행 `parseNumericField`는 `-`·`""` → `null`, `/^\d+$/` → 숫자, 그 밖 → `invalid + 원문 보존`이다. **전량 실측에서 알려진 표기가 셋 더 나왔고, 지금 그대로 돌리면 121행이 `invalid`가 된다.**
+
+| 표기 | 실측 | 처리 | 근거 |
+|------|------|------|------|
+| **전각 숫자** `０`~`９` | **10행**(대부분 `OPK-08`) | **NFKC 정규화 후 반각으로 읽는다** | `Number("３")`은 `NaN`이다. **원천의 표기 흔들림이지 다른 값이 아니다** |
+| **소수점** `2.0` · `2000.0` | **6행** | **`/^\d+(\.0+)?$/`만 허용해 정수로.** 🚨 **`.5` 같은 0이 아닌 소수는 여전히 `invalid`** | 0을 버리는 것은 값이 바뀌지 않지만, **0이 아닌 소수를 버리면 조용히 다른 값이 된다** |
+| **부호 접두** `+1000` · `+2000` | **105행**(전부 `counterRaw`) | **선행 `+` 1개를 떼고 읽는다** | 카운터는 원천이 `+`를 붙여 표기한다. ⚠️ **`+`를 잃는다는 것을 인정한다** — `counter`는 항상 가산값이라 화면에서 다시 붙일 수 있다. **`-1000` 같은 음수 표기는 관측되지 않았고, 나오면 `invalid`다**(우리가 부호를 해석하지 않는다) |
+| **`-` · `""`** | `power` 343 · `counter` 1,164 · `blockNumber` 35 | **`null`** (기존 그대로) | 🚨 **`0`으로 넣지 않는다.** 넣으면 「파워 0인 카드」가 1,164장 생기고 **정렬(B-5)과 필터가 조용히 틀린다** |
+
+- **처리 순서를 고정한다:** `trim` → `NFKC` → 선행 `+` 1개 제거 → `-`/`""`면 `null` → `/^\d+(\.0+)?$/`면 정수 → **그 밖은 `invalid` + 원문 보존.**
+- 🚨 **NFKC는 수치 칸에만 적용한다.** `name_ko`·`effect_text`·`trigger_text`·`traits`에는 걸지 않는다 — **텍스트는 원문 보존이 원칙이고 NFKC는 표기를 바꾼다**(`〜`·`｢｣` 등).
+- **이것이 T1.16 파일을 다시 여는 것인가 — 아니다.** T1.16이 세운 규칙(「알려진 「없음」 표기와 모르는 문자열을 가른다」)은 그대로다. **바뀐 것은 「알려진 표기」의 목록이고, 그것을 넓힌 것은 3,146행 실측이다.** 기존 9건의 테스트 기대값을 하나도 고치지 않는다(가산만 한다).
+
+#### ⓖ 드라이런과 `--apply` 관문 — **무엇을 출력하면 드라이런인가 · 코드가 무엇으로 강제하는가**
+
+**드라이런이 기본값이다.** §4.8 ⓖ의 4부 + 샘플 5건을 그대로 쓰되 T1.18에서 다음을 구체화한다.
+
+| 부 | T1.18에서 더하는 것 |
+|----|--------------------|
+| **1. 입력 요약** | 🚨 **쓰는 대상(Supabase 프로젝트 호스트)을 함께 찍는다.** 「어느 DB에 넣는지」가 화면에 없으면 로컬과 원격을 혼동한다. **키는 찍지 않는다** |
+| **2. 매핑 판정** | `--game` ↔ **매니페스트의 `game`** 대조(§4.8 ⓚ-5가 「수집기는 DB를 보지 않고 매니페스트에 적어 T1.18이 대조한다」고 예약해 둔 자리) · `--set` ↔ **디렉토리명** 대조 |
+| **3. 행 분류** | `insert` · `skip:same_set` · `skip:other_set` · `update` · `invalid` **5종**(§4.8 ⓖ의 4종에서 `skip`이 갈렸다) |
+| **↳ 부가 3줄** | **접두사 불일치 「N / M (r%)」**(§4.8 ⓕ의 r 분기 문구) · **`colors`에 「다색」 포함 N행** · **`attribute` 복합값 N행** |
+| **↳ `sourceSetLabel`** | **고유값 목록**(최대 20개 + 「외 N개」). PROMO에서 83개가 나오는 것이 여기서 보인다 |
+| **4. 결론 한 줄** | `적재 가능: insert N / skip S(same M, other K) / update U / invalid I` 또는 `적재 불가: <BlockReason>` |
+| **샘플 5건** | `insert` 앞 5건의 **`CardRowDraft` 전 컬럼**. 🚨 **`life`와 `cost`가 따로 보여야 한다** — 「칸이 밀려 들어가는 사고」가 여기서 잡힌다 |
+
+**리포트 파일:** `data/import-report-<stamp>.json`(§4.8 ⓓ). `<stamp>`는 수집기와 같은 형식(`20260829T091234Z`).
+
+**관문 넷 — `gate.ts`가 판정하고 `scripts/`가 값을 모은다.**
+
+| # | 관문 | **코드가 무엇을 보는가** |
+|---|------|--------------------------|
+| 1 | `--apply` 없으면 **한 바이트도 쓰지 않는다** | 기본값이 드라이런. **`--apply`는 `true`/`false` 플래그이고 값을 받지 않는다** |
+| 2 | 🚨 **`backups/`의 최신 덤프가 24시간 이내** | **`backups/` 디렉토리를 읽어** 이름이 `/^catalog-\d{8}-\d{6}\.sql$/`이고 **크기 > 0**인 파일만 후보로 삼고, 그중 **`mtimeMs`가 최대인 것**을 골라 `now - mtimeMs <= 24h`를 본다.<br>**왜 mtime인가 — 파일명의 시각은 로컬 시각이고 타임존이 없다**(`dump-catalog.ts`의 `stamp()`가 `getFullYear()`계열이다). **이름을 파싱하면 서머타임·타임존 이동에서 조용히 틀린다.** 이름 패턴은 **「덤프인지」를 가리는 데만** 쓴다.<br>**크기 > 0을 다시 보는 이유:** `dump-catalog.ts`가 0바이트를 실패로 처리하지만 **실패한 실행이 파일을 남길 수 있다.**<br>🚨 **면제 플래그를 만들지 않는다** — `--skip-dump-check`·환경변수 우회 전부 없다. §4.8 ⓔ가 `--delay-ms`에 대해 「인자가 규율을 깎는 통로가 되지 않게」라고 정한 것과 같다. **덤프가 없으면 `npm run db:dump`를 돌리는 것이 유일한 통과 경로다.**<br>⚠️ **mtime 검사가 「덤프가 유효하다」를 보장하지 않는다**(§4.8 ⓕ의 ⚠️ 그대로). **막는 것은 「아예 안 돌린 채 적재」다** |
+| 3 | **`--from-report <파일>` 필수 + 해시 대조** | 리포트의 `input.sha256`과 **지금 파일의 sha256**을 비교한다. 🚨 **함께 대조하는 것 셋이 더 있다 — `game` · `set` · `mode`.** 해시만 보면 **「OPK-01 파일로 만든 리포트를 들고 `--set OPK-02`로 적용」**이 통과한다. 그리고 **리포트의 결론이 `적재 불가`면 그 자체로 거부한다** |
+| 4 | **`--game` · `--set`이 DB에 실재** | `games.code` · `card_sets.(game_id, code)` 조회. 없으면 거부(ⓔ) |
+
+- 🚨 **`checkApplyGates`는 첫 실패에서 멈추지 않고 넷을 모두 판정해 배열로 돌려준다.** 하나씩 알려 주면 **사람이 관문을 하나씩 뚫는 반복 작업**이 되고, 그 과정에서 「왜 관문이 있는지」가 사라진다.
+- **종료 코드:** 드라이런 성공(결론이 `적재 가능`이든 `적재 불가`이든 **출력이 나왔으면**) → `0` / 관문 실패 → `1` / 적재 중 `consecutive_failures` 중단 → `1`.
+
+#### ⓗ 실패 모드 · 멱등성 · 트랜잭션 경계
+
+**ⓗ-1 재실행하면 어떻게 되는가 — 아무 일도 일어나지 않는다. 그것이 설계다.**
+
+기본 모드는 **insert-only**다(§4.8 ⓕ). 두 번째 실행은 전 행이 `skip:same_set`이 되고 **DB는 그대로다.** 🚨 **멱등성의 근거가 「같은 값을 다시 쓴다」가 아니라 「쓰지 않는다」인 것이 중요하다** — 다시 쓰면 `updated_at` 트리거가 전 행을 건드리고, 그러면 **「이번 실행이 무엇을 바꿨는가」가 타임스탬프에서 사라진다.**
+
+**ⓗ-2 트랜잭션을 쓰지 않는다. 행 단위로 넣고, 실패는 행 단위로 센다.**
+
+| 왜 | |
+|---|---|
+| ⓐ **`supabase-js`에 클라이언트 트랜잭션이 없다** | 여러 문을 한 트랜잭션으로 묶으려면 **postgres 함수(RPC)를 새로 만들어야** 하고, 그것은 **§9.2 ⓒ 전제 3이 지키는 「파괴 표면」을 늘리는 것**이다 — 「카탈로그 전량을 한 번에 주입하는 함수」가 DB 안에 생긴다 |
+| ⓑ **롤백이 필요한 상황이 아니다** | insert-only + `skip:same_set` 덕분에 **부분 적재는 「덜 들어간 상태」이지 「깨진 상태」가 아니다.** 다시 돌리면 남은 것만 들어간다. **복구 수단이 트랜잭션이 아니라 멱등성이다** |
+| ⓒ **행 단위여야 실패를 특정할 수 있다** | 배치 insert는 한 행 때문에 **배치 전체가 거절되고 어느 행인지 알기 어렵다.** §4.8 ⓕ가 「행 단위로 계속 진행하고 끝에 실패 목록을 남긴다」로 이미 정했다 |
+| ⚠️ **대가** | 3,146행이면 왕복이 3,146회다. **로컬 스크립트의 1회성 작업이라 받아들인다** — T1.19의 첫 대상은 1세트(≤276행)다 |
+
+**ⓗ-3 부분 실패 — 어디까지 남는가.** 성공한 행은 **그대로 DB에 남는다.** 실패 목록은 리포트의 `apply.failed`에 `code` · `pgCode` · 메시지로 남고, **연속 10건 실패면 중단**한다(`shouldAbortApply`). **중단해도 리포트 파일은 반드시 쓴다** — §4.8 ⓚ-5가 매니페스트에 대해 「중단했을 때야말로 기록이 필요하다」고 적은 것과 같다.
+
+**ⓗ-4 🚨 세트 간 `code` 중복 3건 — 적재 순서 규칙은 살아 있다. 폐기하지 않는다.**
+
+> ~~설계 중간 보고: 「`code` 중복이 전 세트 통틀어 0건이므로 §4.8 ⓕ ★4의 적재 순서 규칙은 전제가 무너졌다」~~
+> ★ **틀렸다. PROMO 80행 시점의 집계였고, 전량(276행)에서 3건이 나왔다.** 규칙은 **발동한다.**
+
+| | |
+|---|---|
+| **실측** | `OP09-089_P1`(PROMO·STK-27) · `OP06-110_P1`(PROMO·STK-28) · `OP09-043_P1`(PROMO·STK-25) |
+| **적재 순서(§4.8 ⓕ ★4)를 그대로 적용하면** | `OPK → EBK → PROMO → STK` 순이므로 **3건은 PROMO로 굳고**, 뒤에 오는 STK-25·27·28에서 **`skip:other_set` 3건**으로 보고된다 |
+| **그것이 옳은가** | ❓ **모른다. 그리고 규칙의 근거는 「옳아서」가 아니라 「결과가 실행 순서에 따라 달라지지 않게」였다**(§4.8 ⓕ ★4의 ⚠️). **그 근거는 3건이 나온 지금도 그대로다** |
+| **사용자 결정 4c와 충돌하는가** | ❌ **충돌하지 않는다. 겹칠 뿐이다.** 4c는 「PROMO가 별도 세트인가」를 정했고, 이 3건은 「두 세트 모두에 실린 카드가 어느 쪽으로 굳는가」다. **4c가 PROMO를 세트로 세웠기 때문에 비로소 이 질문이 성립한다** |
+| **→ 판정** | **기본값(순서 규칙)대로 PROMO로 굳힌다. 그리고 3건을 리포트가 행 단위로 찍고 T1.19 블록에 적는다.** 되돌리기는 `UPDATE cards SET set_id=<STK-**> WHERE code IN (...)` **3행**이다. 🚨 **다만 「스타터 덱에 실제로 든 카드를 프로모로 귀속시키는 것이 맞는가」는 우리가 답할 수 없다 — 사용자 일감으로 올린다**(4e) |
+| ⚠️ **미래 보증이 아니다** | **지금 3건이라는 것이 다음 세트에서도 적다는 뜻이 아니다.** 규칙을 「방어적으로 남긴다」가 아니라 **「실제로 쓰인다」로 격상해 적는다** |
+
+**ⓗ-5 `23505`(unique 위반)를 실패로 세지 않는다 — `raced`로 따로 센다.** 계획을 세운 뒤 적용 사이에 다른 경로(관리자 폼 · 다른 임포트)가 같은 `code`를 넣으면 `23505`가 온다. **동작은 `skip`과 같고 뜻은 「계획이 낡았다」이므로** 실패 목록이 아니라 `apply.raced`에 담고 **연속 실패 카운터를 올리지 않는다.** ⚠️ **`skip:other_set`과 혼동하지 않는다** — 저쪽은 계획 시점에 이미 알던 것이고 이쪽은 계획 뒤에 생긴 것이다.
+
+**ⓗ-6 `code` 비교에서 대소문자를 접지 않는다.** 접미사가 `_P1`과 `_p1`로 섞여 있다(실측). **`toLowerCase()`로 비교하면 원천이 다른 카드로 주는 두 코드가 하나로 뭉친다.** DB의 `unique (game_id, code)`도 대소문자를 구분하므로 **비교는 원문 그대로**가 DB와 같은 판정이 된다. ⚠️ **마이그레이션 005의 주석이 소문자 `_p1`만 예로 든 것은 예시이지 규칙이 아니다**(§4.8 ⓙ-2가 이미 같은 정정을 했다). **`code` 정규식은 여전히 만들지 않는다**(§4.8 ⓚ-4).
+
+**ⓗ-7 그 밖의 실패 모드는 §4.8 ⓕ의 표를 그대로 따른다.** 중간 파일 안 `code` 중복 → **전건 중단**(파일 내 중복은 실측 0건이므로 발동하면 진짜로 깨진 것이다) · 파일 안 `sourceSetLabel`이 둘 이상 → 🚨 **거부하지 않는다 — 이 조항은 뒤집혔다**(ⓘ-2).
+
+#### ⓘ 집계와 보고 — **전부 `report.ts`에. `scripts/`에서 세지 않는다**
+
+**ⓘ-1 무엇을 무엇으로 세는가.**
+
+| 세는 것 | 정의 | 실패로 세는가 |
+|---------|------|---------------|
+| `insert` | DB에 없는 `code` · 정규화 통과 | — |
+| `skip:same_set` | 이미 있고 `set_id`가 `--set`과 **같다** | ❌ **정상.** 재실행의 정상 경로 |
+| `skip:other_set` | 이미 있고 `set_id`가 **다르다** | ❌ 정상. **단 행 단위로 찍는다** |
+| `update` | `--update`에서 화이트리스트 컬럼 중 **실제로 값이 다른 것이 있다** | ❌ |
+| `invalid` | 정규화가 `ok: false` | ❌ **실패가 아니다 — 「버려진 행」이다.** 🚨 **그러나 결론 줄에 반드시 나온다.** 0이 아닌 `invalid`는 사람이 봐야 한다 |
+| `failed` | **적재 중** DB가 거절했다(`23505` 제외) | ✅ |
+| `raced` | 적재 중 `23505` | ❌ (ⓗ-5) |
+
+**ⓘ-2 🚨 「중간 파일 하나에 세트가 둘 이상이면 거부한다」는 조항을 뒤집는다.**
+
+> ~~§4.8 ⓕ: 「**중간 파일 하나에 세트가 둘 이상** → 거부한다. 중간 파일 1개 = 세트 1개를 강제한다」~~
+
+**PROMO 파일 하나에 `sourceSetLabel` 고유값이 83개다.** 조항을 문자 그대로 적용하면 **PROMO는 영원히 적재 불가**다. **원 조항의 목적은 「세트 매핑을 추론하지 않는다」였고**, 그 목적은 **디렉토리명 = 세트**라는 4c 결정이 더 강하게 달성한다. **→ 세트 판정은 `--set`과 디렉토리명이 하고, `sourceSetLabel`은 세트 판정에 일절 쓰지 않는다.** 대신 **고유값 목록을 리포트에 낸다**(ⓖ) — **거부 조건이 관측 항목으로 강등된 것이지 없어진 것이 아니다.**
+
+**ⓘ-3 집계를 `src/lib/catalog/report.ts`에 두는 이유는 취향이 아니다.** T1.16 결함 1(`failureCount` 오집계)이 **매니페스트 조립을 `scripts/`에 둬서** 났고, §8 T1.16 블록이 **「T1.18의 임포터 리포트 집계가 정확히 같은 모양이라 같은 실수가 반복될 수 있다」**고 미리 적어 두었다. **경계선은 「무엇을 실패로 세는가」가 배선이 아니라 판단이라는 것이다.**
+
+#### ⓙ 테스트 전략 — **DB를 타는 코드에 §7을 그대로 적용하지 않는다**
+
+§4.8 ⓘ가 네트워크에 대해 그은 선을 DB에 그대로 적용한다: **순수 함수만 단위 테스트하고, 그러기 위해 설계를 나눈다(ⓑ).**
+
+| 대상 | 단위 테스트 | 근거 |
+|------|------------|------|
+| `normalize.ts` · `plan.ts` · `report.ts` · `gate.ts` | ✅ **한다** | 입력이 값이고 출력이 값이다. **DB 조회 결과·파일 사실(mtime·크기·해시)을 전부 인자로 받게 만든 것이 이 테스트를 가능하게 하는 설계다** |
+| `validation/catalog.ts` 가산분(ⓕ) | ✅ 한다 | 기존 9건에 이어 붙인다 |
+| **Supabase 쓰기** | ❌ **하지 않는다** | §4.8 ⓘ 그대로 — 원격을 때리는 테스트를 만들지 않는다. **검증 경로는 드라이런 → 소규모 실적재 → `/admin/cards` 눈 확인**(T1.19) |
+| **`scripts/import-catalog.ts`** | ❌ (테스트 불가 — `vitest`의 `include` 밖) | 🚨 **그래서 판단을 여기 두지 않는다.** 이 칸이 비어 있는 것이 ⓑ의 존재 이유다 |
+| **E2E** | ❌ **0건** | 화면이 없다 |
+
+**픽스처는 합성이다 — 단 두 가지는 실측값을 그대로 쓴다.** §4.8 ⓘ의 치환 규칙(콘텐츠는 치환 · 구조는 보존)을 따르되, **ⓐ 분기의 근거가 되는 어휘**(`리더`·`캐릭터`·`이벤트`·`스테이지`·빈 문자열)와 **ⓑ 실측 중복 3건의 `code`**(`OP09-089_P1`·`OP06-110_P1`·`OP09-043_P1`)는 치환하지 않는다. **치환하면 테스트가 검증하던 것이 사라진다**(§4.8 ⓘ가 `cardType`에 대해 이미 내린 판정). ⚠️ **카드명·효과 텍스트는 그대로 치환한다** — 실측 4건의 카드명(방주 맥심 등)은 **plan.md에 판정 근거로 남기고 픽스처에는 넣지 않는다.**
+
+**★ 최소 테스트 건수 — 총 46건. 현재 전체 253건 → 299건, 카탈로그 90건 → 136건.**
+
+**`normalize.test.ts` — 16건**
+1. 정상 캐릭터 → 17필드가 매핑표대로 `CardRowDraft`에 앉는다(**컬럼명 기준**)
+2. `리더` → `life`에 값 · `cost`는 `null`
+3. `캐릭터`/`이벤트`/`스테이지` → `cost`에 값 · `life`는 `null` (3케이스)
+4. 🚨 **알 수 없는 `cardType`** → `ok:false` · `reason:"card_type_unknown"` · **원문 보존**
+5. 🚨 **`cardType`이 빈 문자열** → `ok:false` · `reason:"card_type_empty"` (실측 4건의 형태)
+6. `code`가 비었거나 공백 포함 → `ok:false`
+7. **`name_ko`도 `name_ja`도 없으면** `ok:false` · `reason:"no_name"` (008 `check`와 같은 규칙)
+8. `name_ja`가 **항상 `null`**이고, 넣으려 해도 타입이 막는다(타입 레벨 단언)
+9. `colors` — 1개 · 3개 · **「다색」 포함** · 빈 값 `[]`
+10. `traits` — 1·2·3개 · 빈 값
+11. `attribute` — `""`·`-` → `null` / **`?` → `"?"` 보존** / **`참격/특수` → 원문 보존**
+12. `power` `-` → `null` (0이 **아니다**)
+13. 🚨 **전각 `０` → `0`** (NFKC)
+14. **`2.0` → `2` · `2.5` → `invalid`**
+15. **`+1000` → `1000` · `-1000` → `invalid`**
+16. **`source_image_url`이 절대 URL이고 `image_url` 키가 결과 객체에 존재하지 않는다**
+
+**`plan.test.ts` — 16건**
+1~5. 분류 5종 각각(`insert`·`skip:same_set`·`skip:other_set`·`update`·`invalid`)
+6. 🚨 **실측 3건**(`OP09-089_P1`·`OP06-110_P1`·`OP09-043_P1`)이 **PROMO 적재 뒤 STK 적재에서 `skip:other_set`으로 분류된다** ★ **적재 순서 규칙이 실제로 발동하는 것을 고정하는 테스트다**
+7. `--update`에서 **값이 같으면 `update`가 아니라 `skip:same_set`**이다(빈 `changes`로 update를 만들지 않는다)
+8. 🚨 `changes`에 **`name_ja`·`code`·`set_id`·`game_id`·`image_url`이 어떤 경우에도 나오지 않는다**
+9. `set`이 `null` → 결론 `적재 불가: set_not_found` · **행 분류를 시도하지 않는다**
+10. `game`이 `null` → `game_not_found`
+11. **파일 안 `code` 중복** → `duplicate_code_in_file` · 전건 중단
+12. 빈 파일 → `empty_file`
+13. **대소문자가 다른 `code`는 다른 카드다**(`_P1` vs `_p1`)
+14. 접두사 불일치 `r = 0` → `silent`
+15. `0 < r < 100` → `suspect` (행 목록이 채워진다)
+16. `r = 100` → `reprint_set` (**행 목록이 비어 있다** — STK에서 소음이 되지 않는다)
+
+**`report.test.ts` — 6건**
+1. `counts`가 5종 + total로 맞아떨어진다(합이 입력 행 수와 같다)
+2. **`skip`을 합치지 않는다** — `skipSameSet`·`skipOtherSet`이 따로 나온다
+3. 결론 문자열이 `적재 가능`/`적재 불가`를 정확히 가른다
+4. 샘플이 **`insert` 앞 5건**이고 5건 미만이면 있는 만큼
+5. `shouldAbortApply` — 9 → `false` · 10 → `true`
+6. `renderReport`가 **문자열을 돌려주고 `console`을 부르지 않는다**
+
+**`gate.test.ts` — 8건**
+1. `--apply` 없음 → 관문 판정 자체가 필요 없다(빈 배열)
+2. 덤프 없음 → 관문 2 실패
+3. **23시간 59분 → 통과 · 24시간 1분 → 실패**(경계)
+4. **0바이트 덤프는 후보에서 빠진다**
+5. **이름 패턴이 다른 파일은 후보에서 빠진다**
+6. `pickLatestDump`가 **mtime 최대**를 고른다 — **이름이 더 최근인 다른 파일이 있어도**
+7. 리포트 해시 불일치 → 관문 3 실패 / **`set`만 다른 경우도 실패**
+8. 🚨 **관문 넷이 동시에 실패하면 실패 넷이 전부 배열에 담긴다**(첫 실패에서 멈추지 않는다)
+
+#### ⓚ 건드리면 안 되는 것 · 멈춰야 하는 신호
+
+**ⓚ-1 건드리지 않는다.**
+
+- ❌ **`cards.name_ja`** — 어떤 경로로도 값을 쓰지 않는다. **타입이 `null` 리터럴인 것이 그 강제다**
+- ❌ **`cards.image_url`** — 읽지도 쓰지도 않는다(T1.22 전용)
+- ❌ **`cards.base_code`** — 생성 컬럼
+- ❌ **DELETE · `db:clean` 호출 · `truncate`** — **경로 자체를 만들지 않는다**(§4.8 ⓕ). `rg`로 0건을 확인한다
+- ❌ **`/api/admin/*`** — 엔드포인트 0개 추가(§9.2 ⓒ 전제 3)
+- ❌ **`card_sets` · `games` · `keywords` · `card_keywords`에 쓰기 0건**
+- ❌ **마이그레이션 0건** — 009 후보 셋(ⓓ-5 · ⓓ-6 · ⓔ)은 **세우기만 하고 열지 않는다**
+- ❌ **T1.16 파일의 기존 동작** — `parse.ts`·`pace.ts`·`series.ts`·`manifest.ts`를 고치지 않는다. `validation/catalog.ts`는 **가산만**(ⓕ)
+- ❌ **네트워크** — 임포터는 원천에 요청하지 않는다. **`CATALOG_ORIGIN`은 URL 조립에만 쓰인다**
+
+**ⓚ-2 멈춰야 하는 신호 — 계속 밀어붙이지 말고 사람에게 돌려준다.**
+
+| 신호 | 왜 멈추는가 |
+|------|-------------|
+| **연속 10건 DB 실패** | 계통 오류(권한 · 스키마 불일치)다. 계속 넣으면 피해가 는다 |
+| 🚨 **`23502`(not null 위반)가 `name_ja`에서 난다** | **원격에 008이 적용되지 않았다는 뜻이다.** 재시도로 넘기지 않는다 — 마이그레이션 상태 문제이지 데이터 문제가 아니다 |
+| 🚨 **`42703`(컬럼 없음)** | 같은 이유. **`db:types` 재생성 전의 타입으로 돌고 있을 수 있다** |
+| **`invalid` 비율이 5%를 넘는다** | ⚠️ **차단하지는 않는다** — 결론 줄에 굵게 낸다. 실측 기준 예상 `invalid`는 **4행(0.13%)**이므로, 5%가 나오면 **정규화나 파일이 이상하다는 뜻이다** |
+| **`skip:other_set`이 예상(3건)보다 크게 많다** | 적재 순서 가정이 흔들린 것이다. **사람이 본다** |
+| **파일 안 `code` 중복** | 파싱이 깨졌다(실측 0건) — 전건 중단 |
+
+#### ⓛ T1.19와의 경계 — **T1.18은 코드까지. 실적재는 T1.19다**
+
+| | **T1.18** | **T1.19** |
+|---|---|---|
+| 산출물 | 코드 + 단위 테스트 + **드라이런 출력** | **`cards` 행** + 측정치 |
+| DB | 🚨 **쓰기 0건.** 드라이런은 **조회만** 한다 | 쓴다 |
+| 사람 | 필요 없다 — 에이전트가 닫는다 | **승인·눈 확인이 필요하다** |
+| 선행 | T1.16 · T1.17 | T1.18 + **`card_sets` 행 생성**(ⓔ) + 사용자 일감 |
+
+- **T1.18이 만들지 않는 것:** 마이그레이션 · 화면 · API 라우트 · E2E · `card_sets` 행 · 이미지 관련 무엇도.
+- 🚨 **드라이런조차 DB 조회는 한다**(`games` · `card_sets` · `cards`). **읽기는 T1.18의 범위 안이다** — 관문 4와 분류가 그것 없이는 성립하지 않는다. **「DB에 한 바이트도 쓰지 않는다」와 「DB를 보지 않는다」를 섞지 않는다.**
+- ⚠️ **T1.18을 닫는 데 실제 데이터가 필요한가 — 아니다.** 드라이런은 `card_sets`가 비어 있어도 **「적재 불가: set_not_found」라는 정상 출력**을 낸다. **그것이 완료 기준 ⓗ가 요구하는 바로 그 출력이다.**
+
 ---
 
 ## 5. API 명세
@@ -2754,6 +3335,7 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
     - ⓗ `lint` · `typecheck` · `test` 통과
 
 - [ ] **T1.18** 카탈로그 임포터 — 중간 파일 → DB · **L** · 선행 T1.16 · T1.17
+  - ★★ **구현 계약이 §4.11로 확정됐다 (2026-08-29).** 모듈 경계 · 공개 시그니처 · 17필드 매핑표 · 관문 넷의 구현 방법 · 실패 모드 · 테스트 46건 내역이 전부 그 절에 있다. **아래 완료 기준은 그 계약의 체크리스트이고, 어긋나면 §4.11이 우선한다.** 🚨 **§4.11은 40세트 3,146행 전량 실측 위에서 쓰였다 — 「표본을 전량으로 착각한 판정」이 이 세션에만 세 번 뒤집혔다는 기록이 그 절 머리말에 있다.**
   - **완료 기준**
     - ⓐ `npm run catalog:import -- --game opcg --set OPK-14 --file <path>`가 **드라이런으로 동작한다(기본값).** `--apply` 없이는 DB에 **한 바이트도 쓰지 않는다**
     - ⓑ 드라이런 출력이 **4부 + 샘플 5건 전문**을 낸다 (§4.8 ⓖ). `update`는 컬럼별 `before → after`를, `invalid`는 원문 값을 찍는다
@@ -2771,6 +3353,17 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
     - ⓚ 분류기가 단위 테스트된다 — `insert`/`skip:same_set`/`skip:other_set`/`update`/`invalid` + 세트 부재 + 코드 중복 + **이름 둘 다 결측** + **알 수 없는 `card_type`** + 연속 10건 실패 중단
     - ⓛ **`/api/admin/*`에 새 엔드포인트가 0개다** (§9.2 ⓒ 전제 3)
     - ⓜ `lint` · `typecheck` · `test` 통과. **마이그레이션 0건 · 화면 0개 · E2E 0건**
+    - ★★ **2026-08-29 신설 — §4.11 확정으로 더해지는 조항 (ⓝ~ⓥ). 위 ⓐ~ⓜ은 그대로 살아 있다.**
+    - ★ ⓝ 🚨 **판단이 `src/lib/catalog/`에 있다 — `normalize.ts` · `plan.ts` · `report.ts` · `gate.ts` 넷.** `scripts/import-catalog.ts`에는 **argv 파싱 · 파일 I/O · sha256 · Supabase 호출 · `console.log` · 종료 코드**만 남는다. **특히 집계(`report.ts`)를 `scripts/`에 두지 않는다** — T1.16 결함 1이 정확히 그 자리에서 났다(§4.11 ⓘ-3)
+    - ★ ⓞ **`life`/`cost` 분배가 구현되고 테스트된다** — `리더`→`life` / `캐릭터`·`이벤트`·`스테이지`→`cost` / **그 밖과 빈 문자열 → `invalid`**(§4.11 ⓓ-2 · ⓓ-3). 🚨 **실측 4건(`OP06-117`·`OP08-067_P2`·`ST04-008`·`ST04-013`)이 `invalid`로 나오는 것을 단위 테스트가 고정한다**
+    - ★ ⓟ **수치 표기 4종을 처리한다** — 전각(10행) · 소수점 `.0`(6행) · 부호 `+`(105행) · `-`/빈값 → `null`(1,500행 이상). **`0`으로 넣지 않는다.** `validation/catalog.ts`는 **가산만** 하고 기존 9건의 기대값을 고치지 않는다(§4.11 ⓕ)
+    - ★ ⓠ 🚨 **`image_url`을 읽지도 쓰지도 않는다.** 원천 URL은 **`source_image_url`**로만 간다. `rg`로 임포터 경로에 `image_url` 0건을 확인한다(ⓕ ★★의 후속)
+    - ★ ⓡ **`base_code`를 쓰지 않는다**(생성 컬럼) · **`card_keywords`에 0행을 쓴다** · **`card_sets`·`games`에 쓰기 0건**
+    - ★ ⓢ **관문 2가 `backups/`의 실제 파일 사실로 판정된다** — 이름 패턴 + **크기 > 0** + **mtime 최대**. **파일명의 시각을 파싱하지 않는다**(로컬 시각이라 타임존이 없다). 🚨 **면제 플래그·환경변수 우회를 만들지 않는다**(§4.11 ⓖ)
+    - ★ ⓣ **관문 3이 해시뿐 아니라 `game`·`set`·`mode`도 대조하고, 리포트 결론이 「적재 불가」면 그것만으로 거부한다.** 그리고 **`checkApplyGates`는 첫 실패에서 멈추지 않고 넷을 모두 판정해 돌려준다**
+    - ★ ⓤ 🚨 **분류기가 실측 중복 3건을 `skip:other_set`으로 분류하는 것을 단위 테스트가 고정한다** — `OP09-089_P1` · `OP06-110_P1` · `OP09-043_P1`(PROMO ↔ STK-27·28·25). **적재 순서 규칙(§4.8 ⓕ ★4)이 실제로 발동하는 것을 코드에 못박는 자리다**
+    - ★ ⓥ **단위 테스트 최소 46건** — `normalize` 16 · `plan` 16 · `report` 6 · `gate` 8. **전체 253건 → 299건 이상.** 내역은 §4.11 ⓙ. **DB 쓰기 테스트 0건 · E2E 0건**
+    - ★ ⓦ **뒤집힌 조항 하나를 코드가 따른다 — 「중간 파일 하나에 세트가 둘 이상이면 거부」는 적용하지 않는다.** PROMO는 `sourceSetLabel` 고유값이 83개다. **세트 판정은 `--set`과 디렉토리명이 하고 `sourceSetLabel`은 리포트 관측 항목이다**(§4.11 ⓘ-2)
 
 - [ ] **T1.19** 첫 실적재 1세트 + 측정 — **S (단 사람 손이 필요하다)** · 선행 T1.18 + 사용자 일감(범위 승인 · `db:dump` · §9.3 ⓓ 재확인)
   - **왜 코드 태스크에서 떼어 냈나:** 착수를 사람이 승인하고 종료를 사람이 눈으로 판정한다. **에이전트가 닫을 수 없는 조건을 코드 태스크에 붙이면 그 태스크가 영원히 열린 채로 남는다**(§4.8 ⓐ)
@@ -2786,6 +3379,10 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
     - ⓖ 도감(`/cards`)에서 그 세트가 검색된다
     - ★ ⓗ **첫 실행 대상은 `[OPK-14]`, 두 번째 후보는 `[STK-28]`** (§4.8 ⓕ ★ 4). 두 번째 실행의 `skip:other_set` 건수가 **「같은 코드가 두 세트 목록에 겹치는가」라는 남은 질문에 답한다** — 그 값을 이 블록에 함께 적는다
     - ★ ⓘ **적재 순서 규칙을 지킨다** — `OPK` → `EBK` → 프로모션 → `STK`, 계열 안에서는 번호 오름차순. **근거는 「원판이 옳아서」가 아니라 「결과가 실행 순서에 따라 달라지지 않게」다**(§4.8 ⓕ ★ 4)
+    - ★★ **2026-08-29 신설 (§4.11 확정의 후속).**
+      - ⓙ 🚨 **선행이 하나 늘었다 — `card_sets` 행이 먼저 있어야 한다.** 임포터는 세트를 **자동 생성하지 않는다**(§4.8 ⓕ · §4.11 ⓔ). **그런데 `card_sets.name_ja`가 `not null`이고 우리 원천은 한국어 라벨만 준다** — 사람이 한국어를 `name_ja`에 붙여 넣으면 §4.8 ⓕ가 `cards`에 대해 막은 오염과 같은 형태가 된다. **009(`card_sets.name_ja` nullable + `check`)가 선행이거나, 사용자가 다른 방법을 정해야 한다** → 사용자 일감 4d
+      - ⓚ **`skip:other_set` 3건을 이 블록에 적는다** — `OP09-089_P1` · `OP06-110_P1` · `OP09-043_P1`. **PROMO 적재 뒤 STK-25·27·28 적재에서 나오는 것이 예상값이고**(§4.11 ⓗ-4), **예상과 다르면 적재 순서 가정이 흔들린 것이다.** ⓗ가 「두 세트에 겹치는가」를 물었던 자리의 실제 답이 여기서 확인된다
+      - ⓛ **`invalid` 4건(카드 종류 결측)을 사람이 `/admin/cards`에서 손으로 넣거나, 넣지 않기로 하고 그 판단을 적는다** — `OP06-117`(방주 맥심) · `OP08-067_P2`(샬롯 푸딩) · `ST04-008`(잭) · `ST04-013`(X 드레이크)
 
 **★★ T1.20~T1.23 — 카드 이미지 자체 호스팅 (2026-08-28 저녁 · §0.1 ⓔ-1 · 계약 전문은 §9.4 ⓕ).**
 
@@ -2902,7 +3499,7 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
     - **테스트: 카탈로그 90 → 101건**(`series` 25→36 — `classifySetOutcome` 9 · `haltSeries` 2 신설) · **전체 253 → 265건.** `typecheck`·`lint`·`test` 전부 재검증했고, 스크래치패드 사본으로 계열 경로 스모크 테스트(요청 0회 경로)도 재확인해 회귀가 없다.
     - **reviewer 발견 3(CLAUDE.md 섹션 3개 삭제)은 여기서 다루지 않는다** — 확인 결과 이번 세션 어떤 작업과도 무관한, **대화 시작 전부터 있던 미커밋 변경**이다(`Commands & Environment`·`Directory Structure`·`Code Quality Standards` 섹션). 사용자 확인이 필요해 손대지 않고 그대로 보고했다.
 
-- [ ] ★★ **T1.25** 전 범위 실수집 4회 + 프로모 코드 형식 판독 — **S (단 사람 손이 필요하다)** · 선행 **T1.24 + 사용자 일감**(범위 승인 · §9.3 ⓓ 재확인)
+- [x] ★★ **T1.25** 전 범위 실수집 4회 + 프로모 코드 형식 판독 — **S (단 사람 손이 필요하다)** · 선행 **T1.24 + 사용자 일감**(범위 승인 · §9.3 ⓓ 재확인) · ✅ **2026-08-29 닫혔다** — PROMO 걸음 2 완주 · **40세트 3,146행** · 판정 근거는 블록 마지막 「체크박스 판정」
   - **왜 코드 태스크에서 떼어 냈나:** **착수를 사람이 승인하고**(`--max-requests`가 그 승인이다 — §4.8 ⓔ) **종료를 사람이 눈으로 판정한다**(프로모 코드 형식 · 중간 파일 확인). **§4.8 ⓐ가 T1.19를 떼어 낸 논리 그대로다**
   - 🚨 **T1.19와 겹치지 않는다 — 하나는 파일, 하나는 DB다.**
     | | T1.19 | T1.25 |
@@ -2952,6 +3549,23 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
         - `EBK-01`에서 `illustrationType`이 **`"애니메이션"`**으로 나온다 — OPK-14에서는 `"오리지널"`·`"원작"` 둘뿐이었다. **§4.8 ⓗ #6의 "고유값은 둘뿐"이 3세트 관측으로는 이제 유효하지 않다 — 목록으로 좁히는 코드를 만들지 않은 것(원문 그대로 저장)이 옳았다는 신호다.**
     - **ⓕ 미완 — 41개 세트 중 40개 완료(OPK 14 · EBK 3 · STK 22 · PROMO 부분 1). 남은 것: `PROMO` 걸음 2.** 체크박스를 켜지 않는다.
     - **ⓖ DB 접근 0회 확인.** `data/catalog/opcg/`에 신규 2,950행(부분 포함) — `git status`에 뜨지 않는다(`.gitignore` 확인).
+  - ★★★ **2026-08-29 (같은 날 이어서) — PROMO 걸음 2 완주. 전 범위 수집이 끝났다. 체크박스를 켠다.**
+    - **실행 기록(계열 매니페스트에서 그대로 옮김 — §4.8 ⓓ 형식):** **2026-08-29 · `PROMO`(걸음 2) · 요청 11/15 · 상한 밖 robots 1회 · 실패 0 · 276행(14페이지 0~13 전량) · `stoppedBy: completed`.** 매니페스트 `data/catalog/opcg/PROMO/manifest-20260829T062927Z.json`.
+    - **ⓔ 눈 확인(요청 0회):** 전 40세트 **3,146행** · **전 행이 정확히 17필드** · 파일 내 `code` 중복 **0** · CSS·스크립트 오염 **0행** · `imagePath` 3,146행 전부 `/fileDownload?...` 한 형태.
+    - **ⓒ 걸음 2가 답한 것 — 걸음 1의 판독 둘이 뒤집혔다. 옛 문장은 위 ⓒ-2·ⓒ-3에 그대로 둔다.**
+      - 🚨 **PROMO에 자체 접두사가 있다 — `P-***` 81건**(접미사 없는 73 + `_` 있는 8). 걸음 1의 80행(페이지 0~3)에는 **0건**이었다. **페이지 순서가 만든 표본 편향이다.**
+      - 🚨 **세트 간 `code` 중복이 3건 나왔다** — `OP09-089_P1`(PROMO·STK-27) · `OP06-110_P1`(PROMO·STK-28) · `OP09-043_P1`(PROMO·STK-25). **§4.8 ⓕ ★4의 「겹침이 있는지 모른다」가 닫혔고, 적재 순서 규칙은 살아 있다**(§4.11 ⓗ-4).
+      - **`sourceSetLabel` 고유값이 83개**(80행 시점 33개) — **세트 라벨이 아니라 유통 정보라는 판정이 더 강해졌다.**
+      - **`ST15`~`ST20` 접두사 코드가 각 5건(총 30) 들어 있다.** ⚠️ **원천에 그 세트 옵션이 없다는 것은 ⓙ-10에 이미 실측으로 적혀 있다** — 즉 **사람이 `--sets`에서 빠뜨린 것이 아니다.** **「40개 세트 완주」는 그대로 유효하다.**
+      - ★ **관측 자체는 남긴다: `code` 접두사와 세트 옵션이 1:1이 아니라는 직접 증거이고, 「접두사로 세트를 추론하지 않는다」의 네 번째 근거다**(§4.11 ⓔ ⓖ). **부수 효과 — `ST15`~`ST20` 스타터 덱 카드는 프로모 경로로 30장만 들어온다. 원천이 주지 않아 메울 수 없다 → 백로그 A-7.**
+    - **★ 체크박스 판정 — 켠다. 근거를 적는다.**
+      | 기준 | 판정 |
+      |---|---|
+      | ⓕ 「40개 세트가 전부 완주로 끝났다」 | ✅ **충족.** 계열 매니페스트 넷의 `stoppedBy`가 전부 `completed`이고 **미착수 0건**이다. PROMO만 `max_requests`였는데 **걸음 2가 `completed`로 닫았다** |
+      | ⓒ 프로모 코드 형식 판독 | ✅ **걸음 1·2 모두 기록됐고 판독 결과가 §4.8 ⓙ와 §4.11에 옮겨졌다** |
+      | ⓖ DB 0건 | ✅ `git status`가 `M CLAUDE.md` 하나다 — **`data/`는 뜨지 않는다** |
+      | ❓ 「41개 중 40개」가 미완 아닌가 | ✅ **아니다.** 41은 **`all` 옵션을 포함한 수**이고 실제 세트는 40개다(ⓙ-10). **`all`은 세트가 아니라 전체 검색이다** |
+      | ⚠️ 원본 화면과의 행 대조 | ⚠️ **세트당 1행 표본까지만 했다**(ⓔ). **전 행 대조는 애초에 이 태스크의 기준이 아니었다** — 기준은 「세트마다 1행 대조」이고 충족했다 |
 
 **T1.11 리팩토링에서 확인한 백로그**
 
@@ -2982,13 +3596,18 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
     | ★ 🚨 **`name_ja`를 무엇으로 채우는가** | **채우지 않는다 — nullable로 되돌린다**(선택지 ⓐ). T1.17이 집행 | §4.8 ⓕ ★★ |
     | ★ **세트 적재 순서** | `OPK` → `EBK` → 프로모션 → `STK`. 근거는 **재현 가능성**이지 「원판이 옳아서」가 아니다 | §4.8 ⓕ ★ 4 |
 
-- [ ] ★★ **A-6** 전 범위 카탈로그 수집 — **M~L** · **2026-08-29 신설** (A-5에서 갈라 세웠다 · 판정 근거는 §8 「A-5 우산」)
+- [x] ★★ **A-6** 전 범위 카탈로그 수집 — **M~L** · **2026-08-29 신설, 같은 날 닫혔다** (T1.24 ✅ · T1.25 ✅ — 40세트 3,146행)
   - **둘의 우산이다: T1.24**(계열 단위 수집 확장 — 에이전트 · 네트워크 0회) **· T1.25**(전 범위 실수집 4회 + 프로모 코드 형식 판독 — 사람 손). **체크는 40개 세트가 전부 완주로 끝났을 때** 한다(T1.25 ⓕ — **「4회 돌렸다」가 완료가 아니다**)
   - **계약 전문은 §4.10이다. §4.8이 아니다** — 🚨 **이 한 줄이 A-5와 갈라 세운 실용적 이유다.** §4.8은 **한 세트 실행**을 전제로 쓰였고 §4.10이 그것을 계열로 넓히면서 **`--max-requests`의 뜻을 바꿨다**(세트 상한 → 실행 전체 상한)
   - **A-5와 겹치지 않는다 — 하나는 DB, 하나는 파일이다.** A-5의 산출물은 `cards` 행이고 A-6의 산출물은 `data/catalog/` 파일과 실행 기록이다. **서로를 막지 않는다**(T1.25 블록의 비교표). ⚠️ **다만 사용자 일감이 겹친다** — **§9.3 ⓓ 재확인**은 둘 다의 착수 조건이고 **같은 날이면 한 번으로 족하다**
 
   - ~~⚠️ **닫히지 않은 것 하나 — 원천의 실제 HTML 구조다.** §4.8 ⓙ에 **확인한 것 8건과 미확인 10건**을 갈라 적었다.~~ → ✅ **2026-08-28 오후에 닫혔다.** 미확인 10건 중 **9건이 관측으로 닫혔고 1건(`size` 상한)은 일부러 열어 뒀다**(시험 자체가 부하다). 판정표 · 행 마크업 · **ⓙ가 묻지 않았던 발견 4건**이 §4.8 ⓙ에 있고, 그 결과로 **§4.8 ⓔ · ⓕ · ⓗ · ⓘ가 갱신되고 ⓚ(구현 계약)가 신설됐다**
   - ⚠️ **그래도 「미확인을 없음으로 읽지 않는다」는 유효하다 — 오히려 지금이 더 미끄럽다.** 본 것은 **41개 세트 중 2개의 1페이지씩**이다. §4.8 ⓙ의 판정표는 **판정과 관측 범위를 같은 칸에 적어** 그 차이를 남겼다. 특히 **일본어명은 「두 페이지에서 못 봤다」이지 「사이트 어디에도 없다」의 증명이 아니고**, 그 위에서 내린 판정(nullable 복귀)은 **증명이 아니라 되돌릴 수 있음을 근거로 삼았다**
+
+- [ ] ★ **A-7** `ST15`~`ST20` 스타터 덱 커버리지 구멍 — **판정 보류. 지금 할 수 있는 것이 없다** · **2026-08-29 신설**
+  - **관측:** PROMO 276행 안에 `ST15`~`ST20` 접두사 코드가 각 5건(총 30건) 있는데 **원천의 세트 옵션에는 그 여섯이 없다**(§4.8 ⓙ-10 — 스타트 덱은 `STK-01`~`14`·`STK-21`~`28` 22개). **즉 그 여섯 덱의 카드는 프로모 경로로 30장만 우리 카탈로그에 들어온다.**
+  - 🚨 **원천이 주지 않는 것을 우리가 메울 수 없다.** 다른 원천을 여는 것은 **§4.4.1을 먼저 고쳐야 하는 변경**이고 그 절의 결정 2가 닫아 둔 방향이다. **여기서는 「구멍이 있다는 것을 아는 상태」로 남기는 것이 산출물이다** — 도감에서 없는 카드를 만났을 때 원인을 처음부터 다시 조사하지 않게.
+  - **A-5 · A-6을 막지 않는다.** T1.18 · T1.19의 어떤 조항도 여기 걸려 있지 않다.
 
 **B. 사용자 화면 — 없어서 티가 나는 것**
 
@@ -3237,7 +3856,8 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
 | ★★ **T1.24** | ✅ **닫혔다.** `series.ts` 신설(순수 · 25건) + `scripts/` 재배선 + `PROMO` 도달 경로. **카탈로그 58→90건 · 전체 221→253건** · **기존 58건 무수정** |
 | **T1.17** | ⏸ **착수하지 않았다. 판단이 아니라 사실이 막았다** — 🚨 **Docker 데몬이 떠 있지 않아 로컬 `db:reset` 리허설이 불가능하다**(`supabase status` → `failed to connect to the docker API`). ⓐ의 정의는 **「SQL 작성 **+** 로컬 리허설」**이므로, 지금 손대면 남는 것은 **검증되지 않은 SQL 초안 하나**다 — 무인 판정이 「반쯤 만든 마이그레이션은 반쯤 만든 JSONL과 되돌리기 비용이 다르다」고 적은 바로 그 상태다. ⚠️ **Docker 기동은 사람 손이다 — 사용자 일감으로 세울 만큼 크지는 않고, T1.17에 착수하는 날 함께 한다** |
 
-- 🚨 **그래서 지금 유일한 병목은 T1.25이고, 그 앞은 사용자 일감 4다.** 위 표가 「T1.24가 닫히면 이것이 유일한 병목이 된다」고 미리 적어 둔 그대로가 됐다 — **승인할 대상(`--sets` 목록과 `--max-requests` 4쌍)이 이제 존재한다.**
+- ★★ **2026-08-29 갱신 — 이 문장은 같은 날 소진됐다. 지우지 않고 경과를 남긴다.** T1.25는 **PROMO 걸음 2까지 완주해 닫혔고**(40세트 3,146행), T1.17도 **원격 적용 + `db:types` 재생성까지 끝났다.** **T1.18의 계약(§4.11)이 확정됐으므로 다음은 T1.18 구현이고, 그것은 에이전트 단독으로 닫힌다**(네트워크 0회 · DB 쓰기 0건 · 마이그레이션 0건). 🚨 **T1.19부터가 다시 사람 손이다 — 그리고 새 하드 블로커가 하나 생겼다: `card_sets` 행을 만들려면 `name_ja` `not null`을 어떻게 할지 정해야 한다(사용자 일감 4d).**
+- ~~🚨 **그래서 지금 유일한 병목은 T1.25이고, 그 앞은 사용자 일감 4다.**~~ 위 표가 「T1.24가 닫히면 이것이 유일한 병목이 된다」고 미리 적어 둔 그대로가 됐다 — **승인할 대상(`--sets` 목록과 `--max-requests` 4쌍)이 이제 존재한다.**
 - 🚨 **무인 규율 2(원천 요청 0회)를 지키지 못했다. 상세는 T1.24 블록 마지막 항목에 적었다** — 미승인 세트 `OPK-01`로 **요청 5회**가 나갔고 20초 만에 끊었다. 부하 규율(직렬 · 3초+지터 · UA)은 지켜졌고 **행은 스크래치 사본에만 떨어져 삭제했다.** ★ **교훈: `--out`이 바꾸는 것은 쓰는 곳이지 나가는 곳이 아니다.**
 - **규율 1(파괴적 git 명령 금지)·3(원격 DB 쓰기 0건)은 지켰다.** 커밋도 push도 하지 않았다 — **작업 트리에 그대로 두었다.**
 
@@ -3255,12 +3875,16 @@ SUPABASE_DB_PASSWORD=             # 로컬 CLI 전용(link / db push). 앱 런�
 | ~~2~~ ✅ | ~~**`ADMIN_TOKEN`을 43자 난수로 교체**~~ → **닫혔다** | ★ **2026-08-29, 사용자가 2026-08-28(금)에 이미 교체했다고 확인했다.** `.env.local`의 길이도 43자로 규격과 일치한다(값 자체는 열어 보지 않았다). **T1.17 → T1.18 → T1.19가 실데이터를 넣기 전에 끝난 것이 확인됐다** — 원래 근거였던 「데이터가 들어가기 전이 마지막 기회」가 지켜졌다 |
 | ~~3~~ ✅ | ~~**`npm run db:dump` 1회**~~ → **닫혔다** | ★ **2026-08-29, 사용자가 완료를 확인했다.** T1.17 원격 적용(`db:migrate`)의 선행이 충족됐다 — **원격에 008을 밀기 전 기준점이 생겼다.** ⚠️ **T1.19의 덤프(적재 당일 24시간 이내 재확인)는 별도다 — 이 덤프가 그것을 대신하지 않는다** |
 | ~~★ 4~~ ✅ | ~~**T1.25 계열 수집 범위 승인**~~ → **닫혔다(임시). 실행까지 같은 날 끝났다** | ★ **2026-08-29, 사용자가 「임시로 권장값으로 받자」로 승인했다.** 승인된 값 그대로 `OPK`→`EBK`→`PROMO`→`STK` 순으로 같은 날 실행했다 — `OPK`·`EBK`·`STK` 완주(실패 0), `PROMO`는 걸음 1까지. 상세는 T1.25 로드맵 블록의 「2026-08-29 실행 기록」 |
-| ★ 4c | 🚨 **PROMO를 하나의 세트로 `set_id`에 매핑할 것인가 — 새로 열림** | **신설. 2026-08-29 T1.25 걸음 1에서 나온 관측이 여는 질문이다.** PROMO 카드의 `code`가 자체 접두사가 아니라 원본 부스터/스타터의 코드를 그대로 쓴다(`EB01-006_P3`·`OP01-004_P1` 등, 8개 세트 계열 혼재) — `base_code`가 원본 카드와 같아진다. **T1.25 걸음 2(전량 수집)를 계속하기 전에, PROMO를 별도 `card_sets` 행으로 둘지 아니면 각 카드를 원본 세트에 귀속시킬지를 정해야 남은 예산(약 200회 추가 요청 추정)을 얼마로 잡을지가 정해진다.** T1.18 설계에도 영향을 준다 — 자세한 관측은 T1.25 ⓒ-2·ⓒ-3 참조 |
+| ~~★ 4c~~ ✅ | ~~🚨 **PROMO를 하나의 세트로 `set_id`에 매핑할 것인가**~~ → **닫혔다. 2026-08-29 사용자 결정: PROMO는 별도 `card_sets` 행이다** | ★ **결정 내용:** PROMO 카드의 `set_id`는 **PROMO 세트 행**을 가리킨다. 원본 부스터/스타터에 귀속시키지 않는다. **그래서 임포터는 `code` 접두사 → 세트 코드 매핑 규칙을 만들지 않는다 — 파일(디렉토리명)이 곧 세트다.**<br>**사용자가 든 근거 다섯:** ⓐ 원천의 `【프로모션】` 목록과 **1:1로 대응한다** ⓑ 원본과의 연결은 **이미 `base_code`가 한다**(§4.6) — 중복 설계가 아니다 ⓒ `/sets/[setId]`(§4.9 T2.13)에서 **「세트 = 실제로 뜯을 수 있는 것」**의 의미가 지켜진다 ⓓ 접두사 매핑은 **관측이 아니라 추론**이고 8개 계열만 본 상태라 **§4.4.1이 미끄러진 형태와 같다** ⓔ **되돌리기가 싸다** — `set_id` 한 컬럼 UPDATE.<br>★★ **결정 뒤에 나온 실측 둘이 이 결정을 강화한다(뒤집지 않는다):** ⓕ PROMO 276행 중 **접미사 없는 104행은 원본이 아예 없다**(`P-***` 73장 포함) — **「원본 귀속」 안은 성립 불가였다** ⓖ **`ST15`~`ST20` 접두사 30건에 해당하는 세트 옵션이 원천에 없다** — 접두사와 세트가 1:1이 아니라는 직접 증거.<br>**반영처:** §4.11 ⓔ(계약) · §0.1 ⓕ · §0 결정표 |
+| ~~★ 4d~~ ✅ | ~~**`card_sets` 행 40~41개를 어떻게 만들 것인가 — `name_ja`가 `not null`이다**~~ → **닫혔다. 009까지 나왔다** | ★ **2026-08-29, 사용자가 「009 마이그레이션 승인」을 골랐다.** 제안대로 008이 `cards`에 한 것과 같은 처리를 `card_sets`에 했다 — `supabase/migrations/20260829000009_card_set_name_nullability.sql`(`drop not null` + `card_sets_name_present_ck`) · `setInputSchema`를 `required` → `optional` + object-level `.refine()`로 동기화 · `SetOption`·`AdminSetDetail`의 `name_ja`를 `string \| null`로 넓히고 **`setDisplayName`**(`src/types/admin.ts`)을 신설해 표기 자리 3곳을 옮겼다(`cardDisplayName`과 같은 판정이되 **빈 문자열이 아니라 세트 코드로 떨어진다** — 세트는 `code`가 `not null`이다).<br>**로컬 리허설 통과** — `db:reset`으로 001~009 전부 적용, 한국어 세트명만 있는 행 통과 / 둘 다 null인 행 `card_sets_name_present_ck`로 거부, 테스트 행 정리 확인. `db:types` 재생성 완료. **테스트 268 → 273 · lint · typecheck 통과.**<br>🚨 **남은 것은 원격 적용 하나이고 그것이 사용자 일감 4f다.** |
+| ★ 4f | 🚨 **009를 원격에 적용한다 — `npm run db:migrate` 1회 (신설 · T1.19의 하드 블로커)** | **4d를 대체한다. 4d가 「무엇을 할지」였고 이것은 「누가 실행할지」다.** 원격 스키마 변경이라 **에이전트가 대신하지 않는다**(§8 무인 세션 규율 3과 같은 선). 🚨 **지금 로컬과 원격이 어긋나 있다** — `src/types/database.ts`가 009 이후(로컬) 기준이라 `card_sets.name_ja`를 `string | null`로 말하는데 **원격은 아직 `not null`이다.** **`typecheck`가 통과하고 런타임이 틀리는** 모양(§2.7이 반복해 적은 실패 유형 · 백로그 E-1)이 열려 있다.<br>⚠️ **다만 지금은 터지지 않는다 — 그 사이 원격에 쓰는 코드가 0건이기 때문이다**(적재는 T1.19, 관리자 세트 등록 화면은 사람이 쓸 때만). **T1.19 착수 전까지 닫으면 된다.**<br>**`db:dump`를 다시 받아야 하는가 — 아니다.** 008 앞에서 받은 덤프가 기준점으로 남아 있고, **009는 `not null`을 푸는 것과 `check`를 더하는 것뿐이라 데이터를 잃을 수 없다.** 되돌리기도 `set not null` 한 줄이다. **그래도 받고 싶으면 받는다 — 막지 않는다** |
+| ~~★ 4e~~ ✅ | ~~**PROMO와 STK 양쪽에 실린 카드 3건의 소속**~~ → **닫혔다. 기본값 유지** | ★ **2026-08-29, 사용자가 「기본값대로 PROMO」를 골랐다.** `OP09-089_P1`(PROMO·STK-27) · `OP06-110_P1`(PROMO·STK-28) · `OP09-043_P1`(PROMO·STK-25) 세 건은 **적재 순서 규칙(§4.8 ⓕ ★4)대로 PROMO로 굳고, STK 쪽 실행에서는 `skip:other_set`으로 리포트에 행 단위로 찍힌다**(§4.11 ⓗ). **설계가 이미 그렇게 되어 있었으므로 코드 변경은 0건이다 — 결정이 기본값을 승인한 것이다.** ⚠️ **되돌리기는 여전히 3행 `UPDATE`다** — T1.19에서 실제 화면을 보고 뒤집고 싶어지면 그때 뒤집는다 |
+| ~~★ 4c(원문)~~ | ~~🚨 PROMO를 하나의 세트로 `set_id`에 매핑할 것인가 — 새로 열림~~ | **신설. 2026-08-29 T1.25 걸음 1에서 나온 관측이 여는 질문이다.** PROMO 카드의 `code`가 자체 접두사가 아니라 원본 부스터/스타터의 코드를 그대로 쓴다(`EB01-006_P3`·`OP01-004_P1` 등, 8개 세트 계열 혼재) — `base_code`가 원본 카드와 같아진다. **T1.25 걸음 2(전량 수집)를 계속하기 전에, PROMO를 별도 `card_sets` 행으로 둘지 아니면 각 카드를 원본 세트에 귀속시킬지를 정해야 남은 예산(약 200회 추가 요청 추정)을 얼마로 잡을지가 정해진다.** T1.18 설계에도 영향을 준다 — 자세한 관측은 T1.25 ⓒ-2·ⓒ-3 참조 |
 | ~~4~~ ✅ | ~~T1.14 손입력~~ · ~~`CLAUDE.md` 개정 승인~~ · ~~A-5 수집 범위 승인(첫 실행)~~ → **셋 다 닫혔다** | 앞의 둘은 2026-08-28, **범위 승인은 08-28 밤에 닫혔다** — 사용자가 **권장값 그대로**(`--game opcg --set OPK-14 --max-requests 12`) 승인했고 **요청 10회 · 실패 0 · 160행**으로 끝났다(로드맵 T1.16). ⚠️ **닫힌 것은 「첫 실행분」이다.** 전 범위 승인은 **위 4번(T1.25)으로 새로 열린다** — **한 번의 승인이 다음 실행까지 덮지 않는다는 것이 §4.10 ⓐ가 세운 규율이다.**<br>⚠️ **적재 순서 규칙은 그대로 살아 있다** — `OPK` → `EBK` → 프로모션 → `STK`. **STK를 먼저 넣으면 그 카드들의 소속 세트가 STK로 굳는다**(§4.8 ⓕ ★ 4). **이것은 임포터(T1.18 · T1.19)의 순서이지 수집 순서가 아니다**(§4.10 ⓒ) |
 | ~~3~~ ✅ | ~~**§9.3 ⓓ 재확인 1회**~~ → **2026-08-28에 수행했다. 변화 없음** | 여섯 항목 전부 **2026-08-25 기록과 일치**했고 결과를 `docs/crawler-compliance.md` §3.2 · §9 표에 날짜와 함께 적었다. **§4.4.1 되돌릴 조건 1은 발동하지 않았다.** 🚨 **닫힌 것은 그날의 실행분이다 — 다음 트리거가 둘 있다:** **T1.19 착수 당일**(완료 기준 ⓐ)과 **T1.25 착수 당일**(완료 기준 ⓐ). **같은 날이면 한 번으로 족하고 다른 날이면 각각 다시 한다**(T1.25 ⓑ의 ⚠️). **「08-28에 봤으니 됐다」로 읽지 않는다** — 그 판정의 논리가 애초에 「미리 하면 다시 해야 한다」였다 |
 | ~~4b~~ ✅ | ~~**수집기 UA에 연락처를 넣을지**~~ → **2026-08-28에 결정: 넣지 않는다** | `DeckBinder-CatalogBot/0.1`(§4.8 ⓔ의 기본값). **브라우저 위장은 여전히 하지 않는다 — 연락처 유무와 무관한 별개의 선이다.**<br>⚠️ **결정을 뒤집지 않되 한 가지를 기록해 둔다 — T1.25에서 요청 수가 10회에서 약 205회로 20배가 된다.** 4b가 근거로 든 것은 **「상대가 우리에게 멈추라고 말할 수 있는 채널이 ⓐ 429 ⓑ UA 연락처 둘뿐」**이었고(응답 헤더에 rate limit 신호가 없다 — §4.8 ⓙ-9), **그 논거의 무게는 요청 수에 비례한다.** 🚨 **그렇다고 「그러니 넣어야 한다」로 결론짓지 않는다** — 개인 정보를 외부에 보내는 판단은 여전히 사용자 몫이다. **T1.25 착수 시 이 줄을 한 번 다시 보이게 하는 것까지가 이 문단의 역할이다** |
 | 5 | **Supabase 콘솔에서 현재 요금제의 Storage 용량 · 전송량 한도를 확인한다** | **자체 호스팅 판정이 그 값 위에 서 있다**(§9.4 ⓕ-2). 이 문서가 쓴 **1GB · 월 5GB는 기억에 의한 값이고 확인하지 않았다.** ⚠️ **자릿수가 다르면 ⓕ-2의 판정(Supabase Storage · webp 한 종류 · 페이지당 60장)을 다시 연다.** **T1.22(업로드) 전이면 되므로 급하지 않다** ★ **2026-08-29 재확인: 유효하고 순위 변동 없다.** 선행(T1.19 → T1.20 → T1.21)이 셋 남았고 **이번 세션의 1순위 판정이 그 거리를 줄이지 않았다** — 오히려 T1.24를 앞세워 **한 칸 멀어졌다** |
-| 6 | **이미지 호스트 승인** — T1.20이 집계해 보여주는 호스트를 사람이 승인한다 | **원천 이미지가 목록 페이지와 같은 호스트인지 확인되지 않았다**(§9.4 ⓕ-9). **다르면 그것은 「원천이 하나 늘어나는 것」과 형태가 같고**, `CLAUDE.md` (B)의 원천 고정은 사람이 §4.4.1을 먼저 고치도록 되어 있다. **코드가 승인 없이는 요청을 내보내지 않는다**(T1.20 ⓑ) ★ **2026-08-29 재확인: 유효하다.** ⚠️ **T1.25가 먼저 돌면 이 항목의 재료가 좋아진다** — 40세트 JSONL의 `imageUrl` 필드에서 **호스트 분포를 요청 0회로 집계할 수 있다.** 지금은 2세트뿐이다 |
+| 6 | **이미지 호스트 승인** — T1.20이 집계해 보여주는 호스트를 사람이 승인한다 | **원천 이미지가 목록 페이지와 같은 호스트인지 확인되지 않았다**(§9.4 ⓕ-9). **다르면 그것은 「원천이 하나 늘어나는 것」과 형태가 같고**, `CLAUDE.md` (B)의 원천 고정은 사람이 §4.4.1을 먼저 고치도록 되어 있다. **코드가 승인 없이는 요청을 내보내지 않는다**(T1.20 ⓑ) ★ **2026-08-29 재확인: 유효하다.** ⚠️ **T1.25가 먼저 돌면 이 항목의 재료가 좋아진다** — 40세트 JSONL의 `imageUrl` 필드에서 **호스트 분포를 요청 0회로 집계할 수 있다.** 지금은 2세트뿐이다<br>★★ **2026-08-29 — 재료가 나왔다(요청 0회).** 40세트 **3,146행 전부** `imagePath`가 **`/fileDownload?...` 한 형태**다. 즉 **상대 경로이므로 절대화하면 목록 페이지와 같은 호스트가 된다.** 🚨 **그러나 이것은 상대 경로에서 나온 추론이고 실제 이미지 요청으로 확인한 것이 아니다** — 리다이렉트나 CDN 전환이 있으면 최종 호스트가 다를 수 있다. **승인 판단은 여전히 T1.20이 집계해 보여주는 실제 호스트로 한다** |
 | 7 | **광고를 실제로 붙일 것인가 — 지금 답하지 않아도 된다** | **선택지가 다시 열렸을 뿐 착수 지시가 아니다**(§0.1 ⓔ-3 · §9.1). ⚠️ **답하기로 하는 날 함께 읽을 것:** §9.3 ④축 판정표 · §4.4.1 되돌릴 조건 **4·6** · §0.1 ⓔ의 🚨(「단속의 부재는 권리의 증거가 아니다」). 🚨 **되돌릴 조건 6이 미리 정해 둔 것 하나 — 중지 요청이 오면 수익 상태와 무관하게 회수를 먼저 돌린다.** 그 순서를 지금 못박아 둔 것이 그날의 판단을 대신한다 |
 | 8 | **`faq.fril.jp` 「ラクマのルール」를 브라우저로 열어 본다** | 에이전트 도구로는 두 번 막혔다. **T2.6 전이면 되므로 급하지 않다.** 열리면 금지행위 목록을 §10.5에 원문으로 옮긴다. ★ **2026-08-29: T2.6이 이번 판정에서도 미뤄져 순위가 더 내려간다** |
 | ~~6~~ ✅ | ~~**머지된 브랜치 `refactor/t1-11-cleanup` 삭제**~~ → **2026-08-29에 닫혔다** | `feat/t2-1-t2-2-domain-b6`을 `--no-ff`로 머지하면서 함께 정리했다. **지금 브랜치는 `main` 하나다.** 🚨 **그 결과가 위 1번을 만들었다 — 운영 메모에 규칙으로 남겼다** |

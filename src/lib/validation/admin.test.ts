@@ -52,6 +52,28 @@ describe("setInputSchema", () => {
       setInputSchema.parse({ ...validCard, code: "OP01", released_at: "2022/07/22" }),
     ).toThrowError();
   });
+
+  it("한국어 세트명만 있어도 통과한다 (009 — 유일 원천이 한국어 라벨만 준다, plan §4.11 ⓔ)", () => {
+    const result = setInputSchema.parse({
+      game_id: validCard.game_id,
+      code: "OPK-01",
+      name_ko: "[OPK-01]",
+    });
+
+    expect(result.name_ja).toBeNull();
+    expect(result.name_ko).toBe("[OPK-01]");
+  });
+
+  it("name_ko와 name_ja가 둘 다 없으면 거부한다 (009 — card_sets_name_present_ck와 같은 규칙)", () => {
+    expect(() =>
+      setInputSchema.parse({
+        game_id: validCard.game_id,
+        code: "OPK-01",
+        name_ja: "",
+        name_ko: "",
+      }),
+    ).toThrowError(/name_ko|name_ja/);
+  });
 });
 
 describe("cardInputSchema", () => {

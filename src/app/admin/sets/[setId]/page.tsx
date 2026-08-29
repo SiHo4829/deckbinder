@@ -28,7 +28,7 @@ export default async function AdminEditSetPage(props: PageProps<"/admin/sets/[se
         initial={{
           game_id: set.game_id,
           code: set.code,
-          name_ja: set.name_ja,
+          name_ja: set.name_ja ?? "",
           name_ko: set.name_ko ?? "",
           released_at: set.released_at ?? "",
         }}

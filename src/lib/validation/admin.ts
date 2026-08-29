@@ -31,13 +31,24 @@ const optionalDate = optional.refine(
   "발매일은 YYYY-MM-DD 형식이어야 합니다.",
 );
 
-export const setInputSchema = z.object({
-  game_id: z.uuid(),
-  code: required("세트 코드"),
-  name_ja: required("일본어 세트명"),
-  name_ko: optional,
-  released_at: optionalDate,
-});
+export const setInputSchema = z
+  .object({
+    game_id: z.uuid(),
+    code: required("세트 코드"),
+    // 009(2026-08-29): cards가 008에서 받은 것과 같은 완화다. 유일 원천이 세트
+    // 라벨을 한국어로만 준다는 것이 41개 옵션 전량으로 실측됐다(plan §4.8 ⓙ-10).
+    // "필수"를 name_ko와 상호 대체 가능으로 바꾼다 — 아래 object-level .refine()이
+    // "둘 중 최소 하나"를 강제한다. 🚨 한국어 라벨로 name_ja를 채우는 것은
+    // 여전히 금지다(plan §4.11 ⓔ · 사용자 일감 4d).
+    // ⚠️ cards.name_ja와 달리 이 값은 §5.3 매물 크롤러의 검색 키가 아니다.
+    name_ja: optional,
+    name_ko: optional,
+    released_at: optionalDate,
+  })
+  .refine((v) => v.name_ko !== null || v.name_ja !== null, {
+    message: "name_ko와 name_ja 중 최소 하나는 필요합니다.",
+    path: ["name_ja"],
+  });
 
 export type SetInput = z.infer<typeof setInputSchema>;
 
