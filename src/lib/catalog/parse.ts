@@ -11,7 +11,7 @@
  * (node 환경)에서만 깨진다(plan §4.8 ⓚ-3).
  */
 
-import { JSDOM } from "jsdom";
+import { JSDOM, VirtualConsole } from "jsdom";
 
 import type { CollectedCard } from "./types";
 
@@ -57,9 +57,36 @@ function fieldText(item: Element, className: string): string {
   return el?.textContent?.trim() ?? "";
 }
 
+/**
+ * CSS 파싱 실패 **하나만** 삼키는 가상 콘솔 — plan §8 백로그 E-3.
+ *
+ * 원천 페이지의 `<style>`은 `rrweb-cssom`이 못 읽는 문법(중첩 규칙 등)을 써서
+ * 페이지마다 `Could not parse CSS stylesheet`와 **스타일시트 전문**이 쏟아진다.
+ * 데이터는 무해하지만 계열 실행에서는 세트 수만큼 곱해져, 매니페스트 경로와
+ * 경고가 파묻힌다(§4.10 T1.24 완료 기준 ⓔ · ⓙ가 「사람이 출력을 읽는다」를
+ * 전제한다).
+ *
+ * 🚨 **다른 신호까지 끄지 않는다**(E-3 ⓑ). 거르는 기준은 jsdom이 직접 붙이는
+ * `error.type === "css parsing"` 하나뿐이고, 나머지 `jsdomError`는 기본 동작과
+ * 똑같은 모양(`stack`, `detail`)으로 그대로 내보낸다. 전부 삼키면 이 프로젝트가
+ * 이미 두 번 겪은 「조용한 실패」를 우리 손으로 다시 만드는 것이다.
+ *
+ * 테스트가 이벤트를 직접 넣어 ⓑ를 확인할 수 있도록 export한다.
+ */
+export function createQuietVirtualConsole(): VirtualConsole {
+  const virtualConsole = new VirtualConsole();
+  // jsdomError만 우리가 받고, 나머지 콘솔 이벤트는 기본대로 흘려보낸다.
+  virtualConsole.sendTo(console, { omitJSDOMErrors: true });
+  virtualConsole.on("jsdomError", (error) => {
+    if (error.type === "css parsing") return;
+    console.error(error.stack, error.detail);
+  });
+  return virtualConsole;
+}
+
 /** 순수 함수. 던지지 않는다 — 빈 목록도 정상적인 파싱 결과다. */
 export function parseCardListPage(html: string, page: number): ParsedPage {
-  const dom = new JSDOM(html);
+  const dom = new JSDOM(html, { virtualConsole: createQuietVirtualConsole() });
   const { document } = dom.window;
 
   const noItems = document.querySelector(".noItems") !== null;

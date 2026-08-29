@@ -2,9 +2,14 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { assertNonEmpty, parseCardListPage, resolveSetLabel } from "./parse";
+import {
+  assertNonEmpty,
+  createQuietVirtualConsole,
+  parseCardListPage,
+  resolveSetLabel,
+} from "./parse";
 
 // ⚠️ vitest environment가 jsdom이라 전역 URL이 jsdom(whatwg-url)의 구현으로
 // 바뀐다. Windows 드라이브 문자(D:\...)를 낀 상대 URL 해석에서 경로 세그먼트가
@@ -22,6 +27,7 @@ const edge = fixture("page-edge.html");
 const single = fixture("page-single.html");
 const noItems = fixture("page-no-items.html");
 const missingField = fixture("page-missing-field.html");
+const brokenCss = fixture("page-css-noise.html");
 
 describe("parseCardListPage", () => {
   it("1. 정상 3행 → 15필드가 전부 채워진다(필드명 기준)", () => {
@@ -171,6 +177,64 @@ describe("parseCardListPage", () => {
         { value: "[TST-01] 세트 B", label: "세트 B" },
       ];
       expect(() => resolveSetLabel(options, "TST-01")).toThrow();
+    });
+  });
+
+  // 백로그 E-3 — jsdom이 흘리던 CSS 파싱 잡음 억제. 저장본으로 재현하고
+  // 네트워크는 쓰지 않는다(E-3 ⓓ).
+  describe("가상 콘솔 (E-3)", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("15a. 못 읽는 <style>이 있어도 콘솔에 아무것도 흘리지 않는다", () => {
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      parseCardListPage(brokenCss, 1);
+
+      expect(error).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
+      expect(log).not.toHaveBeenCalled();
+    });
+
+    it("15b. 잡음을 껐어도 파싱 결과는 그대로다", () => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      const parsed = parseCardListPage(brokenCss, 1);
+
+      expect(parsed.cards).toHaveLength(1);
+      expect(parsed.cards[0].code).toBe("TST-1001");
+      expect(parsed.noItems).toBe(false);
+      expect(parsed.lastPageIndex).toBeNull();
+    });
+
+    it("15c. 🚨 CSS 아닌 jsdomError는 삼키지 않는다 (E-3 ⓑ)", () => {
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      const virtualConsole = createQuietVirtualConsole();
+
+      const other = Object.assign(new Error("무언가 다른 실패"), {
+        type: "unhandled exception",
+      });
+      virtualConsole.emit("jsdomError", other);
+
+      expect(error).toHaveBeenCalledTimes(1);
+    });
+
+    it("15d. 억제 기준은 type === \"css parsing\" 하나뿐이다", () => {
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      const virtualConsole = createQuietVirtualConsole();
+
+      const css = Object.assign(new Error("Could not parse CSS stylesheet"), {
+        type: "css parsing",
+        detail: ".a { &:hover { color: red } }",
+      });
+      virtualConsole.emit("jsdomError", css);
+      expect(error).not.toHaveBeenCalled();
+
+      // 같은 메시지라도 type이 없으면 우리 판단 대상이 아니다 — 내보낸다.
+      virtualConsole.emit("jsdomError", new Error("Could not parse CSS stylesheet"));
+      expect(error).toHaveBeenCalledTimes(1);
     });
   });
 });

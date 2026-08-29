@@ -1,0 +1,35 @@
+<style>
+/* 백로그 E-3 재현용. rrweb-cssom(jsdom의 CSS 파서)이 중첩 규칙을 읽지 못해
+   `Could not parse CSS stylesheet`와 이 블록 전문을 흘린다. 원천 페이지가
+   실제로 흘리던 잡음과 같은 모양이다. 네트워크 없이 재현한다. */
+.card_sch_list {
+    display: flex;
+    &:hover { color: red; }
+}
+</style>
+<div class="sub_p_search_box">
+    <select name="" id="">
+        <option value="all">전체</option>
+        <option value="[TST-10] 깨진 스타일시트 세트" selected="selected">[TST-10] 깨진 스타일시트 세트
+    </select>
+</div>
+<div class="card_sch_list">
+    <button class="item">
+        <img class="image" src="/fileDownload?downname=20200101_000000_00000000000000000000000000000006" alt="image">
+
+            <p class="cardGet">[TST-10] 깨진 스타일시트 세트
+            <p class="cardType">리더
+            <p class="cardColor">가색
+            <p class="life">5
+            <p class="cardPoint">특징사
+            <p class="cardCounter">-
+            <p class="animationType">오리지널
+            <p class="cardTrigger">
+            <p class="cardAttr">속성마
+            <p class="power">5000
+            <p class="cardNumber">TST-1001
+            <p class="rarity">L
+            <p class="cardText">효과 텍스트 자리 여섯 번째
+            <p class="blockNumber">1
+        <p class="cardName">테스트카드바</button>
+</div>
