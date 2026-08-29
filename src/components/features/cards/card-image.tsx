@@ -100,8 +100,11 @@ function CardFallbackFrame({
       className="card-placeholder flex h-full w-full flex-col justify-between gap-2 p-3"
     >
       {/*
-        카드명이 프레임의 유일한 필수 항목이다 — `name_ja`가 not null이라 항상 값이
-        있다(plan §9.4 ⓑ). 속성이 null이고 showCode가 false여도 빈 상자가 되지 않는다.
+        카드명이 프레임의 유일한 필수 항목이다 — cardDisplayName이
+        name_ko·name_ja 중 하나를 고른다(plan §9.4 ⓑ). T1.17 이후로는
+        `name_ja` 단독의 not null 보장이 아니라 cards_name_present_ck(둘 중
+        하나)가 그 자리를 대신한다(plan §4.8 ⓗ). 속성이 null이고 showCode가
+        false여도 빈 상자가 되지 않는다.
       */}
       <p className="line-clamp-3 text-[11px] leading-snug font-medium text-balance text-foreground/80">
         {cardDisplayName(card)}

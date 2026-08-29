@@ -106,55 +106,85 @@ export type Database = {
         Row: {
           attribute: string | null
           base_code: string | null
+          block_number: number | null
           card_type: string | null
           code: string
+          colors: string[] | null
+          cost: number | null
+          counter: number | null
           created_at: string
           effect_text: string | null
           game_id: string
           id: string
+          illustration_type: string | null
           image_url: string | null
+          life: number | null
           name_en: string | null
-          name_ja: string
+          name_ja: string | null
           name_ko: string | null
+          power: number | null
           rarity: string | null
           set_id: string | null
+          source_image_url: string | null
           sub_type: string | null
+          traits: string[] | null
+          trigger_text: string | null
           updated_at: string
         }
         Insert: {
           attribute?: string | null
           base_code?: string | null
+          block_number?: number | null
           card_type?: string | null
           code: string
+          colors?: string[] | null
+          cost?: number | null
+          counter?: number | null
           created_at?: string
           effect_text?: string | null
           game_id: string
           id?: string
+          illustration_type?: string | null
           image_url?: string | null
+          life?: number | null
           name_en?: string | null
-          name_ja: string
+          name_ja?: string | null
           name_ko?: string | null
+          power?: number | null
           rarity?: string | null
           set_id?: string | null
+          source_image_url?: string | null
           sub_type?: string | null
+          traits?: string[] | null
+          trigger_text?: string | null
           updated_at?: string
         }
         Update: {
           attribute?: string | null
           base_code?: string | null
+          block_number?: number | null
           card_type?: string | null
           code?: string
+          colors?: string[] | null
+          cost?: number | null
+          counter?: number | null
           created_at?: string
           effect_text?: string | null
           game_id?: string
           id?: string
+          illustration_type?: string | null
           image_url?: string | null
+          life?: number | null
           name_en?: string | null
-          name_ja?: string
+          name_ja?: string | null
           name_ko?: string | null
+          power?: number | null
           rarity?: string | null
           set_id?: string | null
+          source_image_url?: string | null
           sub_type?: string | null
+          traits?: string[] | null
+          trigger_text?: string | null
           updated_at?: string
         }
         Relationships: [

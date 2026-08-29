@@ -193,7 +193,9 @@ export interface AdminCardDetail {
   code: string;
   game_id: string;
   set_id: string | null;
-  name_ja: string;
+  // T1.17(plan §4.8 ⓕ ★★)이 cards.name_ja를 nullable로 되돌렸다 —
+  // cards_name_present_ck가 name_ko와 상호 대체를 보장한다.
+  name_ja: string | null;
   name_ko: string | null;
   name_en: string | null;
   rarity: string | null;

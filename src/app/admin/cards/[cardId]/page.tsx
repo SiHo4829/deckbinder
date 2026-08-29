@@ -39,7 +39,7 @@ export default async function AdminEditCardPage(
           game_id: card.game_id,
           set_id: card.set_id ?? "",
           code: card.code,
-          name_ja: card.name_ja,
+          name_ja: card.name_ja ?? "",
           name_ko: card.name_ko ?? "",
           name_en: card.name_en ?? "",
           rarity: card.rarity ?? "",

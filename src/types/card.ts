@@ -2,7 +2,7 @@ export interface CardListItem {
   id: string;
   code: string;
   name_ko: string | null;
-  name_ja: string;
+  name_ja: string | null;
   rarity: string | null;
   attribute: string | null;
   card_type: string | null;
@@ -31,9 +31,14 @@ export interface CardListResponse {
 /**
  * 표기 이름. 한국어명 커버리지가 부분적이라 없으면 일본어명을 그대로 쓴다.
  * 임의 번역을 만들지 않는다 (plan §4.4).
+ *
+ * 🚨 T1.17이 name_ja를 nullable로 되돌리면서(cards_name_present_ck — 둘 중
+ * 하나만 있으면 된다) 이 함수가 "항상 값이 있다"를 타입으로 보장할 수 없게
+ * 됐다. 둘 다 null인 행은 DB 체크 제약이 막지만, 그 보장은 런타임의 것이지
+ * 컴파일 타임의 것이 아니다 — 빈 문자열로 안전하게 떨어진다(plan §4.8 ⓗ).
  */
 export function cardDisplayName(card: Pick<CardListItem, "name_ko" | "name_ja">): string {
-  return card.name_ko ?? card.name_ja;
+  return card.name_ko ?? card.name_ja ?? "";
 }
 
 export interface CardDetail {
@@ -44,7 +49,7 @@ export interface CardDetail {
   game_id: string;
   set_id: string | null;
   name_ko: string | null;
-  name_ja: string;
+  name_ja: string | null;
   name_en: string | null;
   rarity: string | null;
   attribute: string | null;
