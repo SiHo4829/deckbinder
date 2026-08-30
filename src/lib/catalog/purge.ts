@@ -303,6 +303,35 @@ export function pickVerifySample(
   return pool.slice(0, Math.min(size, pool.length));
 }
 
+// ─── 표본 검증 판정 (ⓔ · 2026-08-30 실측이 고친 자리) ────────────────────
+
+/**
+ * 이 응답이 「객체가 사라졌다」를 뜻하는가.
+ *
+ * 🚨 **완료 기준 ⓔ는 「GET해 404를 확인한다」고 적었는데, Supabase Storage는
+ * 없는 객체에 HTTP `400`을 돌려준다.** `404`는 본문 JSON 안에 문자열로 들어
+ * 있다 — `{"statusCode":"404","error":"not_found","code":"NoSuchKey"}`.
+ * (2026-08-30 로컬 스택에서 실측했다.)
+ *
+ * **ⓔ를 문자 그대로 구현하면 정상적으로 회수된 객체가 전부 「남아 있다」로
+ * 보고된다.** 그 오보는 단순한 잡음이 아니다 — **회수가 됐는지 안 됐는지를
+ * 절차가 스스로 판정하지 못하게 만들고**, 몇 번 반복되면 운영자가 그 경고를
+ * 무시하게 된다. 회수는 §9.4 ⓕ-4가 「자체 호스팅의 대가를 감당하는 유일한
+ * 장치」라고 적은 것이므로, 그 장치의 검증부가 거짓말하는 상태를 두지 않는다.
+ *
+ * ⚠️ **모르는 응답은 「사라졌다」로 읽지 않는다.** 증명하지 못하면 남아 있는
+ * 것으로 센다 — 회수 검증에서 안전한 쪽은 그쪽이다.
+ */
+export function isObjectGone(status: number, body: string | null): boolean {
+  if (status === 404) {
+    return true;
+  }
+  if (status === 400 && body !== null) {
+    return /"code"\s*:\s*"NoSuchKey"/.test(body) || /"error"\s*:\s*"not_found"/.test(body);
+  }
+  return false;
+}
+
 // ─── 출력 ──────────────────────────────────────────────────────────────────
 
 function describeRange(range: PurgeRange): string {

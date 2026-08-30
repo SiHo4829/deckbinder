@@ -25,6 +25,7 @@ import {
   buildPurgePlan,
   decideApply,
   formatPurgePlan,
+  isObjectGone,
   parsePurgeRange,
   pickVerifySample,
   purgeConclusion,
@@ -276,14 +277,17 @@ async function main(): Promise<void> {
 
   // 4단계 — 표본 검증(ⓔ). 무작위 20건에 GET해 404를 확인한다.
   const sample = pickVerifySample(plan.objects);
-  const verified: { name: string; status: number }[] = [];
+  const verified: { name: string; status: number; gone: boolean }[] = [];
   for (const name of sample) {
     const res = await fetch(supa.publicUrl(name), { method: "GET" });
-    verified.push({ name, status: res.status });
+    // 🚨 Supabase는 없는 객체에 400을 주고 404는 본문에 넣는다(2026-08-30 실측).
+    // 판정은 purge.ts에 있다 — 여기서 상태 코드를 해석하지 않는다.
+    const body = await res.text().catch(() => null);
+    verified.push({ name, status: res.status, gone: isObjectGone(res.status, body) });
   }
-  const notGone = verified.filter((v) => v.status !== 404);
+  const notGone = verified.filter((v) => !v.gone);
   console.log(
-    `표본 검증 — ${verified.length}건 중 404 ${verified.length - notGone.length}건` +
+    `표본 검증 — ${verified.length}건 중 사라진 것 ${verified.length - notGone.length}건` +
       (notGone.length > 0 ? ` 🚨 남아 있는 것 ${notGone.length}건` : ""),
   );
 
@@ -296,7 +300,7 @@ function writeReport(
   plan: PurgePlan,
   conclusion: ReturnType<typeof purgeConclusion>,
   stamp: string,
-  result: { applied: boolean; verified: { name: string; status: number }[] },
+  result: { applied: boolean; verified: { name: string; status: number; gone: boolean }[] },
 ): void {
   const dir = join("data", "purge-reports");
   mkdirSync(dir, { recursive: true });
@@ -319,7 +323,7 @@ function writeReport(
         localDeleted: result.applied ? plan.localFileCount : 0,
         conclusion,
         verifiedSample: result.verified,
-        verified404: result.verified.filter((v) => v.status === 404).length,
+        verifiedGone: result.verified.filter((v) => v.gone).length,
       },
       null,
       2,

@@ -13,6 +13,7 @@ import {
   buildPurgePlan,
   decideApply,
   formatPurgePlan,
+  isObjectGone,
   parsePurgeRange,
   pickVerifySample,
   purgeConclusion,
@@ -382,5 +383,31 @@ describe("formatPurgePlan — 드라이런 출력 (ⓑ)", () => {
   it("실행 순서를 출력에 적는다 — 사람이 순서를 눈으로 확인한다", () => {
     expect(text).toContain("DB를 먼저 비우고 버킷을 지운다");
     expect(text.indexOf("clear_image_url")).toBeLessThan(text.indexOf("delete_objects"));
+  });
+});
+
+describe("isObjectGone — ⓔ의 「404 확인」은 실물과 달랐다 (2026-08-30 실측)", () => {
+  // 🚨 Supabase Storage는 없는 객체에 HTTP 400을 준다. 404는 본문 안에 있다.
+  // ⓔ를 문자 그대로 구현하면 정상 회수가 전부 「남아 있다」로 오보되고,
+  // 그러면 회수 절차가 스스로를 검증하지 못한다.
+  const gone400 = '{"statusCode":"404","error":"not_found","message":"Object not found","code":"NoSuchKey"}';
+
+  it("🚨 400 + NoSuchKey를 「사라졌다」로 읽는다 — 실측한 실제 응답이다", () => {
+    expect(isObjectGone(400, gone400)).toBe(true);
+  });
+
+  it("순수한 404도 「사라졌다」다 — 원격이 다르게 답할 수 있다", () => {
+    expect(isObjectGone(404, null)).toBe(true);
+  });
+
+  it("🚨 200은 남아 있는 것이다", () => {
+    expect(isObjectGone(200, null)).toBe(false);
+  });
+
+  it("⚠️ 모르는 응답은 「사라졌다」로 읽지 않는다 — 증명 못 하면 남아 있는 것으로 센다", () => {
+    expect(isObjectGone(500, null)).toBe(false);
+    expect(isObjectGone(403, null)).toBe(false);
+    expect(isObjectGone(400, '{"error":"something else"}')).toBe(false);
+    expect(isObjectGone(400, null)).toBe(false);
   });
 });
