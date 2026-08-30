@@ -19,7 +19,8 @@
     "db:dump": "tsx --env-file=.env.local scripts/dump-catalog.ts",
     "catalog:collect": "tsx --env-file=.env.local scripts/collect-catalog.ts",
     "catalog:import": "tsx --env-file=.env.local scripts/import-catalog.ts",
-    "images:collect": "tsx --env-file=.env.local scripts/collect-images.ts"
+    "images:collect": "tsx --env-file=.env.local scripts/collect-images.ts",
+    "images:purge": "tsx --env-file=.env.local scripts/purge-images.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
