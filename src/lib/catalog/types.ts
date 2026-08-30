@@ -140,3 +140,65 @@ export interface SeriesRun {
   readonly notStarted: readonly string[];
   readonly stoppedBy: CollectStopReason;
 }
+
+// ─── 이미지 수집 (T1.20 · plan §9.4 ⓕ) ─────────────────────────────────────
+// 🚨 가산만 한다. 위의 `CollectRun`·`SeriesRun`은 T1.16·T1.24가 고정한 계약이고
+// 이미지 확장이 그 의미를 바꾸지 않는다(§4.10 ⓗ와 같은 자세).
+
+/** 이미지 요청 1건의 기록. */
+export interface ImageRequestLog {
+  readonly url: string;
+  /** 🚨 응답이 실제로 도착한 URL. 리다이렉트를 숨기지 않는다 (ⓑ-3). */
+  readonly finalUrl: string | null;
+  readonly startedAt: string;
+  readonly status: number | null;
+  readonly durationMs: number;
+  /** 원본 바이트. 측정 3(§9.4 ⓕ-9)의 재료다. */
+  readonly bytes: number | null;
+  /** webp 변환 후 바이트. 변환 전 실패면 null. */
+  readonly webpBytes: number | null;
+  readonly attempt: number;
+}
+
+export type ImageStopReason =
+  | CollectStopReason
+  /** 🚨 ⓑ-3 — 승인된 호스트가 아닌 곳에 응답이 도착했다. 즉시 전체 중단. */
+  | "final_host_mismatch"
+  /** 승인이 없어 요청을 한 건도 내보내지 않았다. 실패가 아니라 **설계된 정지**다. */
+  | "not_approved";
+
+/**
+ * 이미지 수집 매니페스트 — `data/images/<game>/_runs/images-<stamp>.json`.
+ *
+ * **완주든 중단이든 항상 쓴다**(T1.20 ⓔ · §4.8 ⓓ). `data/`는 커밋되지 않으므로
+ * 이 파일이 실행의 유일한 증거다.
+ */
+export interface ImageRun {
+  readonly schemaVersion: 1;
+  readonly game: string;
+  readonly setCodes: readonly string[];
+  /** 사람이 실제로 친 인자 원문. **이것이 승인의 사본이다.** */
+  readonly argv: readonly string[];
+  /** 🚨 승인된 호스트. 빈 배열이면 요청이 한 건도 나가지 않았다는 뜻이다. */
+  readonly approvedHosts: readonly string[];
+  /** 절대화에 쓴 base와 **그 출처**. 코드에 박은 값이 아님을 기록으로 남긴다(명세 3). */
+  readonly baseOrigin: string;
+  readonly baseSource: string;
+  readonly userAgent: string;
+  readonly startedAt: string;
+  readonly finishedAt: string;
+  readonly robots: { readonly url: string; readonly status: number; readonly checkedAt: string };
+  readonly delayMs: number;
+  readonly jitterMs: number;
+  readonly webp: { readonly maxEdgePx: number; readonly quality: number };
+  /** ★ 요청 전량. 요약하지 않는다(§4.8 ⓓ). */
+  readonly requests: readonly ImageRequestLog[];
+  readonly requestCount: number;
+  readonly maxRequests: number;
+  readonly failureCount: number;
+  readonly savedCount: number;
+  readonly skippedCount: number;
+  readonly invalidCount: number;
+  readonly hostDeniedCount: number;
+  readonly stoppedBy: ImageStopReason;
+}
