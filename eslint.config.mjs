@@ -95,6 +95,35 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  {
+    // plan §3.5 정정 3번 — "워커 프로젝트가 생기면 같은 규칙을 workers/** 에도
+    // 건다. 워커가 없는 오늘은 1·2번만 한다 — 없는 경로에 규칙을 걸면
+    // 검증되지 않은 채 초록이 뜬다."
+    //
+    // T1.30에서 workers/image-proxy 가 생겼으므로 이제 건다 (2026-09-01).
+    //
+    // 🚨 워커의 tsconfig는 `@/*`가 아니라 `@/lib/validation/*` 별칭 하나만
+    // 공유한다. 즉 `@/lib/catalog`는 워커에서 애초에 해석되지 않는다 —
+    // 그러면 이 규칙은 무엇을 하는가? **틀린 자세를 이른 자리에서 잡는다.**
+    // 별칭을 넓히는 것은 한 줄이고, 그 한 줄이 들어오는 순간 이 규칙이 없으면
+    // 아무도 막지 않는다. 경계를 tsconfig 하나에만 맡기지 않는다.
+    files: ["workers/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/lib/catalog", "@/lib/catalog/*", "../../src/lib/catalog/*"],
+              allowTypeImports: true,
+              message:
+                "카탈로그 수집기는 로컬 스크립트 전용이다 (plan §4.8 ⓒ). 워커가 공유하는 구획은 @/lib/validation/* 하나다 (§3.4 · §3.5).",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;
