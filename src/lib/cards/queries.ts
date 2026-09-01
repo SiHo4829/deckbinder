@@ -2,13 +2,15 @@ import "server-only";
 
 import { cache } from "react";
 
+import { withProxiedImage } from "@/lib/cards/image-src";
+import { clientEnv } from "@/lib/env";
 import { createSupabaseAnonClient } from "@/lib/supabase/public";
 import type { CardDetail, CardListItem } from "@/types/card";
 
 // 쿠키를 읽지 않는 익명 클라이언트를 쓴다. server.ts(cookies 사용)를 쓰면
 // 세그먼트가 강제로 동적 렌더링되어 ISR·정적 생성이 성립하지 않는다.
 const DETAIL_COLUMNS =
-  "id,code,base_code,name_ko,name_ja,name_en,rarity,attribute,card_type,sub_type,image_url,effect_text,set_id,game_id";
+  "id,code,base_code,name_ko,name_ja,name_en,rarity,attribute,card_type,sub_type,image_url,source_image_url,effect_text,set_id,game_id";
 
 /**
  * 상세 페이지용 카드 1건. 없으면 null.
@@ -35,7 +37,7 @@ export const fetchCardDetail = cache(async (
 
   if (error || !data) return null;
 
-  return {
+  return withProxiedImage({
     ...data,
     set: data.card_sets
       ? {
@@ -48,7 +50,7 @@ export const fetchCardDetail = cache(async (
       .map((row) => row.keywords)
       .filter((k): k is { code: string; label_ko: string } => k !== null)
       .map((k) => ({ code: k.code, label: k.label_ko })),
-  } as CardDetail;
+  } as CardDetail, clientEnv.NEXT_PUBLIC_IMAGE_PROXY_BASE);
 });
 
 /**
@@ -62,11 +64,13 @@ export async function fetchCardAlternatives(
 
   const { data } = await supabase
     .from("cards")
-    .select("id,code,name_ko,name_ja,rarity,attribute,card_type,sub_type,image_url,set_id")
+    .select(
+      "id,code,name_ko,name_ja,rarity,attribute,card_type,sub_type,image_url,source_image_url,set_id",
+    )
     .eq("game_id", card.game_id)
     .eq("base_code", card.base_code)
     .neq("id", card.id)
     .order("code");
 
-  return data ?? [];
+  return (data ?? []).map((row) => withProxiedImage(row, clientEnv.NEXT_PUBLIC_IMAGE_PROXY_BASE) as CardListItem);
 }

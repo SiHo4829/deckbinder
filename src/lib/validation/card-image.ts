@@ -84,6 +84,39 @@ export function isValidDownname(value: string): boolean {
   return downnameFormat(value) !== null;
 }
 
+/**
+ * `?downname=…`의 값. **이것이 원천에서 이미지 한 장을 가리키는 식별자다.**
+ *
+ * 🚨 고유 이미지 수를 이 값으로 세는 이유(T1.20 명세 5): 행 수는 **카드 수**이고
+ * 요청 수는 **이미지 수**다. 둘이 다르면 사람이 승인하는 숫자의 의미가
+ * 흐려진다 — `--max-requests`가 곧 승인이기 때문이다(§4.8 ⓔ).
+ *
+ * ★ **T1.31 (2026-09-01): `src/lib/catalog/images.ts`에서 옮겨 왔다. 로직 무변경.**
+ * 🚨 **옮긴 이유는 T1.29가 호스트 판정 넷을 옮긴 것과 같다** — 이 함수를
+ * `@/lib/catalog`에 둔 채로 `src/lib/cards/`의 `proxiedImageUrl()`이 부르면
+ * **「로컬 스크립트 전용 구획」 선언과 실제가 어긋난다**(§4.8 ⓒ · §3.5 「번들 오염」).
+ * ⚠️ **여기서는 lint가 잡아 주지 않는다** — 차단 글롭이 `src/app/**`와
+ * `src/lib/validation/**`뿐이라 `src/lib/cards/**`는 어느 쪽도 아니다.
+ * **그래서 자리를 옮기는 것이 유일한 방어다**(T1.31 ⓖ-ⓑ의 `rg`가 문지기다).
+ *
+ * ⚠️ **`isValidDownname()`을 부르지 않는다.** 이 함수는 **꺼내기만** 하고
+ * 형식 판정은 부르는 쪽이 한다 — 수집기는 원천이 준 값을 그대로 세어야 하고
+ * (형식이 낯설어도 그것은 관측이다), 프록시 URL 조립은 형식을 통과한 것만
+ * 써야 한다. **두 요구가 다르므로 한 함수에 합치지 않는다.**
+ */
+export function extractDownname(imagePath: string): string | null {
+  const queryStart = imagePath.indexOf("?");
+  if (queryStart < 0) {
+    return null;
+  }
+  const value = new URLSearchParams(imagePath.slice(queryStart + 1)).get("downname");
+  if (value === null) {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
 // ─── 호스트 판정 (T1.20 ⓑ에서 옮겨 왔다. 로직 무변경) ─────────────────────
 
 export function hostOf(url: string): string | null {

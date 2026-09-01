@@ -30,6 +30,11 @@ const clientSchema = z.object({
   NEXT_PUBLIC_SITE_URL: z.url(),
   // 애드센스 승인 후에 채운다. 없으면 광고를 렌더하지 않는다.
   NEXT_PUBLIC_ADSENSE_CLIENT: z.string().optional(),
+  // 카드 이미지 리버스 프록시의 base URL (T1.30 · plan §3.5).
+  // 🚨 optional이다. 필수로 걸면 프록시를 배포하기 전에는 앱이 부팅조차 못 한다.
+  //    없으면 proxiedImageUrl()이 전량 null을 내고 화면은 폴백으로 착지한다
+  //    — 그것이 정상 동작이고 T1.31 ⓕ가 단위 테스트로 단언하는 것이다.
+  NEXT_PUBLIC_IMAGE_PROXY_BASE: z.string().optional(),
 });
 
 // Next는 NEXT_PUBLIC_* 를 빌드 시 리터럴로 치환한다.
@@ -41,6 +46,7 @@ export const clientEnv = parseEnv(
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
     NEXT_PUBLIC_ADSENSE_CLIENT: process.env.NEXT_PUBLIC_ADSENSE_CLIENT,
+    NEXT_PUBLIC_IMAGE_PROXY_BASE: process.env.NEXT_PUBLIC_IMAGE_PROXY_BASE,
   },
   "클라이언트 환경변수",
 );

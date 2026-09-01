@@ -16,6 +16,7 @@
 import {
   checkFinalHost,
   decideHost,
+  extractDownname,
   hostOf,
   sniffImageFormat,
 } from "@/lib/validation/card-image";
@@ -36,8 +37,15 @@ import type { ImageRequestLog, ImageRun, ImageStopReason } from "./types";
  *
  * ⚠️ **새 코드는 `@/lib/validation/card-image`에서 직접 가져온다.** 이 re-export는
  * 수집기(T1.20)가 이미 쓰고 있는 경로를 끊지 않기 위한 것이다.
+ *
+ * ★★ **T1.31 (2026-09-01): `extractDownname`이 같은 이유로 뒤따라 옮겨갔다.**
+ * 🚨 **T1.29가 옮긴 여섯에 이것이 빠져 있었고, 그것이 T1.31에서 드러났다** —
+ * 앱의 `proxiedImageUrl()`(`src/lib/cards/`)이 이 함수를 불러야 하는데, 여기
+ * 남겨 두면 **「`@/lib/catalog`는 로컬 스크립트 전용」 선언을 앱 코드가 깨게 된다**.
+ * ⚠️ **빠뜨린 것을 나무랄 자리가 아니다 — T1.29 시점에는 부르는 쪽이 워커뿐이었고
+ * 워커는 이 함수를 쓰지 않는다.** 쓰는 쪽이 늘면서 경계가 다시 그어진 것이다.
  */
-export { checkFinalHost, decideHost, hostOf, sniffImageFormat };
+export { checkFinalHost, decideHost, extractDownname, hostOf, sniffImageFormat };
 export type {
   FinalHostCheck,
   HostDecision,
@@ -121,26 +129,6 @@ export const IMAGE_PATH_SHAPES: readonly ImagePathShape[] = [
   "other",
   "empty",
 ] as const;
-
-/**
- * `?downname=…`의 값. **이것이 원천에서 이미지 한 장을 가리키는 식별자다.**
- *
- * 🚨 고유 이미지 수를 이 값으로 세는 이유(명세 5): 행 수는 **카드 수**이고
- * 요청 수는 **이미지 수**다. 둘이 다르면 사람이 승인하는 숫자의 의미가
- * 흐려진다 — `--max-requests`가 곧 승인이기 때문이다(§4.8 ⓔ).
- */
-export function extractDownname(imagePath: string): string | null {
-  const queryStart = imagePath.indexOf("?");
-  if (queryStart < 0) {
-    return null;
-  }
-  const value = new URLSearchParams(imagePath.slice(queryStart + 1)).get("downname");
-  if (value === null) {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed === "" ? null : trimmed;
-}
 
 // ─── 절대화 (T1.20 ⓑ-1 · 명세 3) ───────────────────────────────────────────
 
