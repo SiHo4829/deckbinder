@@ -65,6 +65,65 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  {
+    // plan §3.5 「번들 오염」 (T1.29) — src/lib/validation/** 는 워커와 공유되는
+    // 구획이다. §3.4가 워커 tsconfig에 `@/lib/validation/*` 별칭만 공유하기로
+    // 정했고, `@/lib/catalog`는 §4.8 ⓒ가 「로컬 스크립트 전용」으로 선언한 구획이다.
+    //
+    // 🚨 위 `src/app/**` 블록이 이 경계를 지켜 주지 않는다 — 글롭이 다르다.
+    // 그래서 규칙을 하나 더 건다 (§4.7 ⓓ가 도메인 경계를 Reviewer의 눈에서
+    // lint로 옮긴 것과 같은 조치).
+    //
+    // ⚠️ allowTypeImports — `src/lib/validation/catalog.ts`가 이미
+    // `import type { CollectedCard } from "@/lib/catalog/types"`를 쓰고 있고
+    // **그것은 옳은 코드다**(컴파일에서 지워져 번들에 남지 않는다). 막으려는 것은
+    // 런타임 의존이지 타입 의존이 아니다. 옳은 코드를 막는 규칙은 꺼지게 된다.
+    files: ["src/lib/validation/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/lib/catalog", "@/lib/catalog/*"],
+              allowTypeImports: true,
+              message:
+                "validation은 워커와 공유되는 구획이다 (plan §3.5). catalog는 로컬 스크립트 전용이므로 값 import를 두지 않는다. 타입만 필요하면 `import type`을 쓴다.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // plan §3.5 정정 3번 — "워커 프로젝트가 생기면 같은 규칙을 workers/** 에도
+    // 건다. 워커가 없는 오늘은 1·2번만 한다 — 없는 경로에 규칙을 걸면
+    // 검증되지 않은 채 초록이 뜬다."
+    //
+    // T1.30에서 workers/image-proxy 가 생겼으므로 이제 건다 (2026-09-01).
+    //
+    // 🚨 워커의 tsconfig는 `@/*`가 아니라 `@/lib/validation/*` 별칭 하나만
+    // 공유한다. 즉 `@/lib/catalog`는 워커에서 애초에 해석되지 않는다 —
+    // 그러면 이 규칙은 무엇을 하는가? **틀린 자세를 이른 자리에서 잡는다.**
+    // 별칭을 넓히는 것은 한 줄이고, 그 한 줄이 들어오는 순간 이 규칙이 없으면
+    // 아무도 막지 않는다. 경계를 tsconfig 하나에만 맡기지 않는다.
+    files: ["workers/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/lib/catalog", "@/lib/catalog/*", "../../src/lib/catalog/*"],
+              allowTypeImports: true,
+              message:
+                "카탈로그 수집기는 로컬 스크립트 전용이다 (plan §4.8 ⓒ). 워커가 공유하는 구획은 @/lib/validation/* 하나다 (§3.4 · §3.5).",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

@@ -13,8 +13,44 @@
  * 않는다(T1.20 ⓗ).
  */
 
+import {
+  checkFinalHost,
+  decideHost,
+  extractDownname,
+  hostOf,
+  sniffImageFormat,
+} from "@/lib/validation/card-image";
+// `planImageFetches`가 `hostReason` 칸에 쓴다. 🚨 아래 `export type { … } from`은
+// **재수출일 뿐 로컬 바인딩을 만들지 않으므로** 이 import가 따로 필요하다.
+import type { HostDecisionReason } from "@/lib/validation/card-image";
+
 import { nextDelayMs } from "./pace";
 import type { ImageRequestLog, ImageRun, ImageStopReason } from "./types";
+
+/**
+ * ★ **T1.29 (2026-08-31): 호스트 판정 넷이 `@/lib/validation/card-image`로 옮겨갔다.**
+ *
+ * 🚨 **여기서 re-export하는 것은 하위 호환이 아니라 「이동이 안전했다」는 증거다** —
+ * `images.test.ts` 70건이 **기대값을 한 줄도 바꾸지 않고** 통과해야 하고, 그것이
+ * T1.29의 완료 기준 ⓑ다. 옮긴 이유는 §3.5 「번들 오염」에 있다(요약: 워커는
+ * `@/lib/validation/*`만 공유받고, `@/lib/catalog`는 로컬 스크립트 전용 구획이다).
+ *
+ * ⚠️ **새 코드는 `@/lib/validation/card-image`에서 직접 가져온다.** 이 re-export는
+ * 수집기(T1.20)가 이미 쓰고 있는 경로를 끊지 않기 위한 것이다.
+ *
+ * ★★ **T1.31 (2026-09-01): `extractDownname`이 같은 이유로 뒤따라 옮겨갔다.**
+ * 🚨 **T1.29가 옮긴 여섯에 이것이 빠져 있었고, 그것이 T1.31에서 드러났다** —
+ * 앱의 `proxiedImageUrl()`(`src/lib/cards/`)이 이 함수를 불러야 하는데, 여기
+ * 남겨 두면 **「`@/lib/catalog`는 로컬 스크립트 전용」 선언을 앱 코드가 깨게 된다**.
+ * ⚠️ **빠뜨린 것을 나무랄 자리가 아니다 — T1.29 시점에는 부르는 쪽이 워커뿐이었고
+ * 워커는 이 함수를 쓰지 않는다.** 쓰는 쪽이 늘면서 경계가 다시 그어진 것이다.
+ */
+export { checkFinalHost, decideHost, extractDownname, hostOf, sniffImageFormat };
+export type {
+  FinalHostCheck,
+  HostDecision,
+  HostDecisionReason,
+} from "@/lib/validation/card-image";
 
 // ─── 부하 규율 (T1.20 ⓒ) ───────────────────────────────────────────────────
 
@@ -94,26 +130,6 @@ export const IMAGE_PATH_SHAPES: readonly ImagePathShape[] = [
   "empty",
 ] as const;
 
-/**
- * `?downname=…`의 값. **이것이 원천에서 이미지 한 장을 가리키는 식별자다.**
- *
- * 🚨 고유 이미지 수를 이 값으로 세는 이유(명세 5): 행 수는 **카드 수**이고
- * 요청 수는 **이미지 수**다. 둘이 다르면 사람이 승인하는 숫자의 의미가
- * 흐려진다 — `--max-requests`가 곧 승인이기 때문이다(§4.8 ⓔ).
- */
-export function extractDownname(imagePath: string): string | null {
-  const queryStart = imagePath.indexOf("?");
-  if (queryStart < 0) {
-    return null;
-  }
-  const value = new URLSearchParams(imagePath.slice(queryStart + 1)).get("downname");
-  if (value === null) {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed === "" ? null : trimmed;
-}
-
 // ─── 절대화 (T1.20 ⓑ-1 · 명세 3) ───────────────────────────────────────────
 
 /**
@@ -133,83 +149,6 @@ export function absolutizeImagePath(imagePath: string, baseOrigin: string): stri
   } catch {
     return null;
   }
-}
-
-export function hostOf(url: string): string | null {
-  try {
-    return new URL(url).host;
-  } catch {
-    return null;
-  }
-}
-
-// ─── 호스트 화이트리스트 (T1.20 ⓑ-2) ──────────────────────────────────────
-
-export type HostDecisionReason =
-  | "allowed"
-  /** 🚨 승인이 아직 없다. **빈 화이트리스트는 「전부 허용」이 아니라 「전부 거부」다.** */
-  | "empty_allowlist"
-  | "not_allowlisted"
-  | "unparsable";
-
-export interface HostDecision {
-  readonly allowed: boolean;
-  readonly host: string | null;
-  readonly reason: HostDecisionReason;
-}
-
-/**
- * 이 URL로 요청을 내보내도 되는가.
- *
- * 🚨 **승인이 없는 상태(빈 목록)에서 전부 거부되는 것이 이 함수의 핵심
- * 동작이다.** 「승인 전까지 코드가 요청을 내보내지 않는다」(T1.20 ⓑ)가
- * 문서가 아니라 여기서 지켜진다.
- */
-export function decideHost(url: string, allowlist: readonly string[]): HostDecision {
-  const host = hostOf(url);
-  if (host === null) {
-    return { allowed: false, host: null, reason: "unparsable" };
-  }
-  if (allowlist.length === 0) {
-    return { allowed: false, host, reason: "empty_allowlist" };
-  }
-  if (!allowlist.includes(host)) {
-    return { allowed: false, host, reason: "not_allowlisted" };
-  }
-  return { allowed: true, host, reason: "allowed" };
-}
-
-export interface FinalHostCheck {
-  readonly ok: boolean;
-  readonly requestedHost: string | null;
-  readonly finalHost: string | null;
-  readonly reason: "ok" | "redirected_offsite" | "unparsable";
-}
-
-/**
- * **ⓑ-3 (2026-08-30 신설)** — 응답이 실제로 도착한 URL의 호스트를 검사한다.
- *
- * 🚨 **사람이 승인한 것은 도착지가 아니라 출발지였다.** 중간 파일의 값은 상대
- * 경로이므로 우리가 아는 호스트는 **문자열 조립의 결과**일 뿐이고, 리다이렉트나
- * CDN 전환은 **첫 실제 요청에서만** 드러난다. 다른 호스트에 도착하는 것은
- * 「원천이 하나 늘어나는 것」과 형태가 같으므로(`CLAUDE.md` (B) · §4.4.1)
- * 즉시 전체 중단의 사유다. **이 조항이 없으면 승인 절차가 첫 요청에서 조용히
- * 우회된다.**
- */
-export function checkFinalHost(
-  requestedUrl: string,
-  finalUrl: string,
-  allowlist: readonly string[],
-): FinalHostCheck {
-  const requestedHost = hostOf(requestedUrl);
-  const finalHost = hostOf(finalUrl);
-  if (finalHost === null) {
-    return { ok: false, requestedHost, finalHost: null, reason: "unparsable" };
-  }
-  if (!allowlist.includes(finalHost)) {
-    return { ok: false, requestedHost, finalHost, reason: "redirected_offsite" };
-  }
-  return { ok: true, requestedHost, finalHost, reason: "ok" };
 }
 
 // ─── 경로 · 파일명 규칙 (T1.20 ⓐ · ⓓ) ─────────────────────────────────────
@@ -246,38 +185,6 @@ export function imageRelPath(params: {
     return null;
   }
   return `${IMAGE_ROOT}/${params.game}/${params.setCode}/${params.code}.${ext}`;
-}
-
-/**
- * 받은 바이트의 실제 포맷 — **`Content-Type` 헤더를 믿지 않는다.**
- *
- * 🚨 **2026-08-30 실측이 이 함수를 만들게 했다.** 원천의 이미지 엔드포인트는
- * `/fileDownload?...`이고 **이미지 MIME을 주지 않는다** — 그래서 헤더만 보면
- * 전부 `bin`으로 떨어진다. 그런데 실제 바이트는 `RIFF….WEBP`, 즉 **원천이
- * 이미 webp를 주고 있었다**(1500×2044 · 약 268KB). **헤더는 의견이고 매직
- * 바이트는 관측이다.**
- *
- * 입력은 바이트뿐이고 파일을 읽지 않는다 — 이 모듈의 I/O 0건 계약은 그대로다.
- */
-export function sniffImageFormat(bytes: Uint8Array): string | null {
-  if (bytes.length >= 12) {
-    // RIFF....WEBP
-    const riff = bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46;
-    const webp = bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50;
-    if (riff && webp) {
-      return "webp";
-    }
-  }
-  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
-    return "png";
-  }
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-    return "jpg";
-  }
-  if (bytes.length >= 6 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) {
-    return "gif";
-  }
-  return null;
 }
 
 /**
