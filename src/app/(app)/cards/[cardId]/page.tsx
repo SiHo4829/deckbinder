@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { BasePriceBadge } from "@/components/features/cards/base-price-badge";
 import { CardImage } from "@/components/features/cards/card-image";
 import { SimilarCards } from "@/components/features/cards/similar-cards";
 import { fetchCardAlternatives, fetchCardDetail } from "@/lib/cards/queries";
@@ -66,9 +65,6 @@ export default async function CardDetailPage(props: PageProps<"/cards/[cardId]">
           <div className="aspect-card overflow-hidden rounded-xl border bg-surface-raised shadow-sm">
             <CardImage card={card} showCode priority />
           </div>
-
-          {/* card_prices는 T2.8에 생긴다. 그때까지 항상 "산출 불가"다. */}
-          <BasePriceBadge priceKrw={null} collectedAt={null} />
         </div>
 
         <div className="flex min-w-0 flex-col gap-6">

@@ -26,7 +26,7 @@ describe("atLeast", () => {
   });
 
   // 호출부의 버그가 아니라 사용자의 중간 상태다. 던지지 않고 "산출 불가"를 낸다
-  // (plan §4.7 ⓔ-1 — §4.3의 sample_size < 3, §2.8 규칙 1과 같은 규칙).
+  // — 표본이 모자라면 값을 지어내지 않는 규칙이다 (plan §4.7 ⓔ-1, §2.8 규칙 1).
   it("산출할 수 없는 입력에는 null을 낸다", () => {
     expect(atLeast({ populationSize: 5, successCount: 2, sampleSize: 7 })).toBeNull();
     expect(atLeast({ populationSize: 5, successCount: 9, sampleSize: 2 })).toBeNull();

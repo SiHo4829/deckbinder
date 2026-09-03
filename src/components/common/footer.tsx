@@ -11,7 +11,7 @@ export function Footer() {
             <p className="text-[15px] font-semibold tracking-tight">덱바인더</p>
             <p className="mt-3 max-w-sm text-xs leading-relaxed text-muted-foreground">
               포켓몬 · 원피스 TCG 플레이어와 컬렉터를 위한 서포팅 플랫폼. 카드 정보와
-              합리적인 시세를 한곳에서 확인하세요.
+              자체 수집 점수를 한곳에서 확인하세요.
             </p>
           </div>
 
@@ -50,7 +50,7 @@ export function Footer() {
         <div className="mt-10 border-t pt-6">
           <p className="text-xs leading-relaxed text-muted-foreground">
             공식 포켓몬 · 원피스 TCG 유통사와 무관한 팬 메이드 서포팅 툴입니다. 표시되는
-            시세는 참고값이며 실제 거래를 보증하지 않습니다.{" "}
+            수집 점수는 자체 산출값이며 금전적 가치를 뜻하지 않습니다.{" "}
             <Link href="/disclaimer" className="underline underline-offset-2">
               자세히
             </Link>

@@ -14,8 +14,9 @@ describe("completion", () => {
     expect(result.ratio).toBe(0.5);
   });
 
-  // 0/0을 1이나 0으로 만들지 않는다. §4.3의 sample_size < 3, §4.7 ⓔ-1의
-  // 확률, 희귀도의 rarity_unknown과 같은 규칙이다 (plan §4.13 ⓔ).
+  // 0/0을 1이나 0으로 만들지 않는다. 표본이 모자라면 값을 지어내지 않고
+  // 산출 불가로 두는 규칙이다 — §4.7 ⓔ-1의 확률, 희귀도의
+  // rarity_unknown과 같다 (plan §4.13 ⓔ).
   it("universe가 비면 ratio가 null이다", () => {
     const result = completion({ universe: [], owned: [] });
 

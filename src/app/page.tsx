@@ -1,8 +1,8 @@
 import {
   ArrowRight,
+  Award,
   BookOpen,
   Layers,
-  Search,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
@@ -33,11 +33,11 @@ const FEATURES = [
     cta: "덱 살펴보기",
   },
   {
-    icon: Search,
-    title: "일본 중고 매물 조회",
-    body: "메르카리 · 라쿠마 · 야후옥션의 실시간 매물을 한 번에. A급 · 미개봉 · PSA/BGS 등급 필터를 기본 제공합니다.",
+    icon: Award,
+    title: "수집 점수",
+    body: "레어도 라벨 · 세트 안 희소성 · 인쇄본 수 같은 우리 DB의 사실만으로 자체 수집 점수를 계산합니다.",
     href: "/cards",
-    cta: "카드 찾기",
+    cta: "수집 점수 보기",
   },
 ] as const;
 
@@ -77,7 +77,7 @@ export default async function HomePage() {
             </h1>
             <p className="mt-5 text-base leading-relaxed text-muted-foreground">
               흩어진 카드 정보를 한곳에 모았습니다. 효과 키워드로 원하는 카드를 찾고,
-              덱을 짜고, 일본 중고 매물의 합리적인 가격을 확인하세요.
+              덱을 짜고, 자체 수집 점수로 내 컬렉션의 가치를 확인하세요.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
@@ -157,11 +157,11 @@ export default async function HomePage() {
             <ShieldCheck className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
             <div>
               <h2 className="text-base font-semibold tracking-tight">
-                되팔이를 돕지 않습니다
+                가격을 표시하지 않습니다
               </h2>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                매물 조회는 1회 1장으로 제한하고, 짧은 시간에 반복 조회할 수 없습니다.
-                대량 스캔과 매크로를 막기 위한 설계입니다.
+                카드는 투자 상품이 아닙니다. 그래프도 등락률도 없고, 애초에
+                가격 자체를 다루지 않습니다.
               </p>
             </div>
           </div>
@@ -170,11 +170,11 @@ export default async function HomePage() {
             <Sparkles className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
             <div>
               <h2 className="text-base font-semibold tracking-tight">
-                시세 그래프를 만들지 않습니다
+                가치는 수집 점수로 보입니다
               </h2>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                등락률도 변동 차트도 없습니다. 지금 사면 얼마인지 알려주는 기준가
-                하나만 보여줍니다. 카드는 투자 상품이 아니니까요.
+                레어도 라벨 · 세트 안 희소성 · 인쇄본 수 같은 우리 DB의 사실로만
+                계산하고, 왜 그 점수인지도 함께 보여줍니다.
               </p>
             </div>
           </div>

@@ -89,13 +89,6 @@ test.describe("카드 상세", () => {
     await expect(page.getByRole("heading", { name: nameKo })).toBeVisible();
   });
 
-  test("기준가 데이터가 없으면 산출 불가로 표기한다", async ({ page }) => {
-    await openByCode(page, baseCode);
-
-    // plan P6 · §4.3: 추정치를 보여주지 않는다.
-    await expect(page.getByText("산출 불가")).toBeVisible();
-  });
-
   test("같은 base_code의 다른 인쇄본이 대체 카드로 나온다", async ({ page }) => {
     await openByCode(page, baseCode);
 
