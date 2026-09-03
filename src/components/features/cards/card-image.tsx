@@ -22,9 +22,12 @@ import { cardDisplayName, type CardListItem } from "@/types/card";
  * 원시값이라 계약은 그대로다.** 대안(서버에서 URL을 미리 검증)은 매 렌더마다
  * 외부 요청을 내는 것이라 plan §1 P2에 정면으로 걸린다.
  *
- * **`next/image`로 바꾸지 않는다** (plan §9.4 ⓓ). 자체 호스팅이 닫혔고 최적화
- * 프록시를 태우면 우리 서버가 원본을 대신 받아오게 되어 "이미지 바이트를 저장하지
- * 않는다"는 경계(§9.4 ⓐ)가 흐려진다.
+ * **`next/image`로 바꾸지 않는다** (plan §9.4 ⓓ). 이미지는 이제 `workers/image-proxy`
+ * 리버스 프록시(T1.30 · T1.31)를 거쳐 우리 워커 도메인에서 나간다 — 원본을 대신
+ * 받아오는 주체는 Next 서버가 아니라 그 워커다. "이미지 바이트를 저장하지 않는다"는
+ * 경계(§9.4 ⓐ)는 여전히 유효하지만(워커는 캐시만 하고 저장하지 않는다), 그 경계를
+ * 지키는 주어가 바뀌었다. **이미지 경로의 프록시는 워커 하나이고, Next의 최적화
+ * 프록시를 그 위에 겹치지 않는다.**
  *
  * ⚠️ **`iconClassName` prop이 없어졌다.** 옛 플레이스홀더의 `ImageOff` 아이콘 크기를
  * 받던 것인데, §2.8-6이 "「이미지 없음」이라는 회색 자리표시로 보이면 안 된다"고
@@ -60,9 +63,9 @@ export function CardImage({
       src={card.image_url}
       alt={cardDisplayName(card)}
       loading={priority ? "eager" : "lazy"}
-      // plan §0.1 ⓒ에서 값이 확정됐다. ⚠️ 효과는 미실측이고 서버 설정에 따라
-      // 양방향이다 — 빈 Referer도 막는 서버에서는 오히려 차단이 는다 (§9.4 ⓒ · ⓔ).
-      referrerPolicy="no-referrer"
+      // referrerPolicy를 싣지 않는다 — 브라우저는 이제 원천이 아니라 우리 워커
+      // 도메인에 요청하므로 원천에 보내던 Referer를 감출 이유가 없다. 원천에 닿는
+      // 것은 워커이고, 워커는 Referer를 위조하지 않는다 — 아예 보내지 않는다 (§3.5 ⓕ).
       onError={() => setLoadFailed(true)}
       // SSR로 내려간 <img>는 하이드레이션 전에 실패하면 onError를 놓친다 —
       // 리스너가 붙기 전에 error 이벤트가 끝나기 때문이다. 마운트 시 한 번 확인한다.

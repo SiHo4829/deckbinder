@@ -29,11 +29,12 @@ describe("CardImage — 핫링크", () => {
     expect(fallback()).not.toBeInTheDocument();
   });
 
-  // plan §0.1 ⓒ — 값이 확정됐다. 실제로 실려 나가는지는 여기서만 확인된다.
-  it("img에 referrerPolicy=no-referrer를 싣는다", () => {
+  // T1.23-A — 이미지가 워커 프록시(우리 도메인)를 거치므로 더 이상 referrerPolicy를
+  // 싣지 않는다. 실제로 실려 나가지 않는지는 여기서만 확인된다.
+  it("img에 referrerPolicy를 싣지 않는다", () => {
     render(<CardImage card={card()} />);
 
-    expect(screen.getByRole("img")).toHaveAttribute("referrerpolicy", "no-referrer");
+    expect(screen.getByRole("img")).not.toHaveAttribute("referrerpolicy");
   });
 });
 
