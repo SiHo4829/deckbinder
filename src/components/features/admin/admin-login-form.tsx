@@ -18,10 +18,12 @@ export function AdminLoginForm() {
     setPending(true);
     setError(null);
 
+    // 여기서만 trim한다 — 서버(session.ts)가 다듬으면 "공백이 붙은 토큰도 유효"가 되어
+    // 인증 비교가 느슨해진다. 다듬는 것은 입력의 일이지 검증의 일이 아니다.
     const res = await fetch("/api/admin/session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({ token: token.trim() }),
     });
 
     if (!res.ok) {
@@ -57,7 +59,7 @@ export function AdminLoginForm() {
           {error}
         </p>
       ) : null}
-      <Button type="submit" disabled={pending || token.length === 0}>
+      <Button type="submit" disabled={pending || token.trim().length === 0}>
         {pending ? "확인 중…" : "로그인"}
       </Button>
     </form>
