@@ -117,4 +117,13 @@ test.describe("카드 상세", () => {
       page.getByRole("heading", { name: "같은 카드의 다른 버전" }),
     ).toHaveCount(0);
   });
+
+  // E-6이 "기준가 데이터가 없으면 산출 불가" E2E를 지웠고 그 자리를 자체
+  // 희귀도 점수 배지가 받는다(T2.15). 점수 숫자는 시드 데이터에 따라 달라지므로
+  // 단언하지 않는다 — 항상 그려지는 표식(고지 문구)만 본다.
+  test("자체 희귀도 점수 배지가 카드 상세에 뜬다", async ({ page }) => {
+    await openByCode(page, baseCode);
+
+    await expect(page.getByText("덱바인더 자체 산정값")).toBeVisible();
+  });
 });

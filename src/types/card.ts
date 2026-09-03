@@ -55,6 +55,8 @@ export interface CardDetail {
   attribute: string | null;
   card_type: string | null;
   sub_type: string | null;
+  /** 일러스트 구분(실측 "오리지널"·"원작"). 희귀도 점수(T2.15)의 번역 입력. */
+  illustration_type: string | null;
   image_url: string | null;
   effect_text: string | null;
   set: { code: string; label: string } | null;

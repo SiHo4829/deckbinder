@@ -3,14 +3,18 @@ import "server-only";
 import { cache } from "react";
 
 import { withProxiedImage } from "@/lib/cards/image-src";
+import { toPrintingFacts, type PrintingGroupAggregate } from "@/lib/cards/printing-facts";
+import type { PrintingFacts } from "@/lib/domain/achievement/rarity-score";
 import { clientEnv } from "@/lib/env";
 import { createSupabaseAnonClient } from "@/lib/supabase/public";
 import type { CardDetail, CardListItem } from "@/types/card";
 
 // 쿠키를 읽지 않는 익명 클라이언트를 쓴다. server.ts(cookies 사용)를 쓰면
 // 세그먼트가 강제로 동적 렌더링되어 ISR·정적 생성이 성립하지 않는다.
+// illustration_type은 T2.15(희귀도 점수 번역)의 입력이다 — 여기 없으면
+// 배지가 일러스트 근거를 절대 그리지 못한다.
 const DETAIL_COLUMNS =
-  "id,code,base_code,name_ko,name_ja,name_en,rarity,attribute,card_type,sub_type,image_url,source_image_url,effect_text,set_id,game_id";
+  "id,code,base_code,name_ko,name_ja,name_en,rarity,attribute,card_type,sub_type,illustration_type,image_url,source_image_url,effect_text,set_id,game_id";
 
 /**
  * 상세 페이지용 카드 1건. 없으면 null.
@@ -73,4 +77,50 @@ export async function fetchCardAlternatives(
     .order("code");
 
   return (data ?? []).map((row) => withProxiedImage(row, clientEnv.NEXT_PUBLIC_IMAGE_PROXY_BASE) as CardListItem);
+}
+
+/**
+ * 희귀도 점수(T2.15)의 번역 입력을 만든다. 번역 자체는 순수 함수
+ * `toPrintingFacts`(`src/lib/cards/printing-facts.ts`)가 하고, 여기는 DB
+ * 왕복만 한다 (plan §4.13 ⓒ).
+ *
+ * `group.printingsInGroup`은 `fetchCardAlternatives(card).length + 1`을
+ * 그대로 넘겨받는다 — 같은 조회를 두 번 하지 않는다(§4.13 T2.15 ⓑ).
+ *
+ * `set_id`가 없으면 세트 집계 조회 자체를 하지 않고 `null`을 넘긴다 —
+ * `toPrintingFacts`가 그 신호로 `set_unknown` 경로에 떨어뜨린다.
+ * `rarity`가 없으면 `peerCount` 조회도 하지 않는다 — 도메인이 `rarityLabel`
+ * 없음을 먼저 보고 `rarity_unknown`으로 떨어지므로 그 값은 점수에 영향을
+ * 주지 않는다.
+ */
+export async function fetchPrintingFacts(
+  card: Pick<CardDetail, "code" | "base_code" | "rarity" | "illustration_type" | "set_id">,
+  group: PrintingGroupAggregate,
+): Promise<PrintingFacts> {
+  if (!card.set_id) {
+    return toPrintingFacts(card, group, null);
+  }
+
+  const supabase = createSupabaseAnonClient();
+  const setId = card.set_id;
+
+  const [setSizeResult, peerCountResult] = await Promise.all([
+    supabase.from("cards").select("id", { count: "exact", head: true }).eq("set_id", setId),
+    card.rarity === null
+      ? Promise.resolve({ count: null })
+      : supabase
+          .from("cards")
+          .select("id", { count: "exact", head: true })
+          .eq("set_id", setId)
+          .eq("rarity", card.rarity),
+  ]);
+
+  const setSize = setSizeResult.count;
+  const peerCount = peerCountResult.count;
+
+  if (setSize === null || peerCount === null) {
+    return toPrintingFacts(card, group, null);
+  }
+
+  return toPrintingFacts(card, group, { peerCount, setSize });
 }

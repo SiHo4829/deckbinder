@@ -3,8 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CardImage } from "@/components/features/cards/card-image";
+import { RarityScoreBadge } from "@/components/features/cards/rarity-score-badge";
 import { SimilarCards } from "@/components/features/cards/similar-cards";
-import { fetchCardAlternatives, fetchCardDetail } from "@/lib/cards/queries";
+import { fetchCardAlternatives, fetchCardDetail, fetchPrintingFacts } from "@/lib/cards/queries";
+import { rarityScore } from "@/lib/domain/achievement/rarity-score";
 import { cardDisplayName } from "@/types/card";
 
 // 이 라우트는 동적이다 — 카드를 고치거나 지운 직후 첫 방문에 그것이 반영되어야
@@ -51,6 +53,13 @@ export default async function CardDetailPage(props: PageProps<"/cards/[cardId]">
   const alternatives = await fetchCardAlternatives(card);
   const name = cardDisplayName(card);
 
+  // alternatives를 다시 조회하지 않는다 — 길이 + 1이 곧 printingsInGroup이다
+  // (plan §4.13 T2.15 ⓑ). population은 넘기지 않는다 — 데이터가 0행이다(ⓓ).
+  const printingFacts = await fetchPrintingFacts(card, {
+    printingsInGroup: alternatives.length + 1,
+  });
+  const rarity = rarityScore(printingFacts);
+
   return (
     <div className="flex flex-col gap-8 py-2">
       <nav className="text-sm text-muted-foreground">
@@ -65,6 +74,7 @@ export default async function CardDetailPage(props: PageProps<"/cards/[cardId]">
           <div className="aspect-card overflow-hidden rounded-xl border bg-surface-raised shadow-sm">
             <CardImage card={card} showCode priority />
           </div>
+          <RarityScoreBadge {...rarity} />
         </div>
 
         <div className="flex min-w-0 flex-col gap-6">
