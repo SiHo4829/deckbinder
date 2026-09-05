@@ -27,7 +27,7 @@ export default async function AdminNewsPage() {
       {posts.length === 0 ? (
         <EmptyState
           title="작성된 기사가 없습니다"
-          description="애드센스 심사에는 충분한 원본 콘텐츠가 필요합니다."
+          description="검색 유입을 받는 공개 콘텐츠입니다. 원본 글만 올립니다."
           action={
             <Link href="/admin/news/new" className="text-sm underline">
               첫 글 작성하기

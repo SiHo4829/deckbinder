@@ -11,7 +11,11 @@ export const mainNav: NavItem[] = [
   { href: "/news", label: "뉴스" },
 ];
 
-/** 푸터. 정책 페이지는 애드센스 심사상 모든 페이지에서 접근 가능해야 한다. */
+/**
+ * 푸터. `/privacy`·`/disclaimer`는 우리 화면의 유일한 연락 창구이고
+ * 개인정보처리방침은 법정 고지이므로, 정책 페이지는 모든 페이지에서
+ * 접근 가능해야 한다.
+ */
 export const footerNav: NavItem[] = [
   { href: "/news", label: "뉴스" },
   { href: "/privacy", label: "개인정보처리방침" },

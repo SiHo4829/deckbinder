@@ -23,7 +23,7 @@ describe("buildSitemapEntries", () => {
     expect(urls).toContain(`${base}/cards/11111111-1111-4111-8111-111111111111`);
   });
 
-  it("정책 페이지를 포함한다 (애드센스 심사에서 접근 가능해야 한다)", () => {
+  it("정책 페이지를 포함한다 (검색 색인에서 접근 가능해야 한다)", () => {
     const urls = buildSitemapEntries(sources).map((e) => e.url);
 
     expect(urls).toContain(`${base}/privacy`);

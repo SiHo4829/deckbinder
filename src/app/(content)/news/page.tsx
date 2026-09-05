@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 
 import { EmptyState } from "@/components/common/empty-state";
-import { AdSlot } from "@/components/common/ad-slot";
 import { NewsList } from "@/components/features/news/news-list";
 import { fetchPublishedPosts } from "@/lib/news/queries";
 
@@ -35,10 +34,7 @@ export default async function NewsPage() {
           description="곧 새로운 소식을 전해드리겠습니다."
         />
       ) : (
-        <>
-          <NewsList posts={posts} />
-          <AdSlot slot="news-list" className="mt-8" />
-        </>
+        <NewsList posts={posts} />
       )}
     </div>
   );

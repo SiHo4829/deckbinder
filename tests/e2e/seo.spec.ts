@@ -9,7 +9,7 @@ test.describe("SEO · 정책 페이지", () => {
     expect(body).toContain("Disallow: /admin");
     expect(body).toContain("Disallow: /api/");
     expect(body).toMatch(/Sitemap:\s*https?:\/\/\S+\/sitemap\.xml/);
-    // 애드센스 크롤러를 막으면 광고 게재가 제한된다.
+    // 검색 색인이 목적이므로 어떤 UA에도 전면 차단(Disallow: /)을 걸지 않는다.
     expect(body).not.toMatch(/Disallow:\s*\/\s*$/m);
   });
 
@@ -25,15 +25,10 @@ test.describe("SEO · 정책 페이지", () => {
     expect(body).not.toContain("/binder");
   });
 
-  test("개인정보처리방침에 애드센스 필수 고지가 있다", async ({ page }) => {
+  test("개인정보처리방침이 렌더된다", async ({ page }) => {
     await page.goto("/privacy");
 
     await expect(page.getByRole("heading", { name: "개인정보처리방침", level: 1 })).toBeVisible();
-    // 심사에서 확인하는 항목들
-    await expect(page.getByText(/제3자.*쿠키|쿠키.*광고/)).toBeTruthy();
-    await expect(
-      page.getByRole("link", { name: "Google 광고 설정" }),
-    ).toHaveAttribute("href", "https://www.google.com/settings/ads");
   });
 
   test("면책 조항이 렌더된다", async ({ page }) => {
@@ -56,11 +51,5 @@ test.describe("SEO · 정책 페이지", () => {
     await footer.getByRole("link", { name: "개인정보처리방침" }).click();
 
     await expect(page).toHaveURL(/\/privacy$/);
-  });
-
-  test("애드센스 ID가 없으면 광고를 렌더하지 않는다", async ({ page }) => {
-    await page.goto("/news");
-
-    await expect(page.locator(".adsbygoogle")).toHaveCount(0);
   });
 });

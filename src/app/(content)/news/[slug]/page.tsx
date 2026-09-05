@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { AdSlot } from "@/components/common/ad-slot";
 import { NewsArticle } from "@/components/features/news/news-article";
 import { fetchPostBySlug } from "@/lib/news/queries";
 
@@ -51,7 +50,6 @@ export default async function NewsDetailPage(props: PageProps<"/news/[slug]">) {
       </nav>
 
       <NewsArticle post={post} />
-      <AdSlot slot="news-article" />
     </div>
   );
 }
