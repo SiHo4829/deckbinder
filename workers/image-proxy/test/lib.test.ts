@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import { RESPONSE_CACHE_CONTROL, cacheKeyUrl } from "../src/lib/cache";
@@ -194,6 +197,29 @@ describe("upstream — 헤더 계약", () => {
     for (const browserish of ["Mozilla", "AppleWebKit", "Chrome", "Safari", "Gecko"]) {
       expect(ua).not.toContain(browserish);
     }
+  });
+
+  it("연락처가 있으면 UA 끝에 괄호로 붙는다 (T4.4 — IMAGE_PROXY_CONTACT)", () => {
+    // wrangler.toml [vars] IMAGE_PROXY_CONTACT와 같은 값이어야 한다.
+    expect(upstreamUserAgent("jsh040829@gmail.com")).toBe(
+      "DeckBinder-ImageProxy/0.1 (jsh040829@gmail.com)",
+    );
+  });
+
+  it("wrangler.toml [vars]에 IMAGE_PROXY_CONTACT가 시크릿이 아니라 평문으로 있다 (T4.4)", () => {
+    // §9.12 ⓛ — /privacy가 이미 공개하는 주소라 [vars]가 맞다. wrangler
+    // secret으로 넣지 않는다(그러면 이 값이 파일에 아예 없어야 정상이라
+    // 이 테스트가 실패로 그것을 잡는다).
+    const tomlPath = fileURLToPath(new URL("../wrangler.toml", import.meta.url));
+    // CRLF 정규화 — JS 정규식은 `$`(m 플래그)가 `\n` 앞뿐 아니라 `\r` 앞에서도
+    // 매칭돼서, 정규화 없이 `\r\n`을 그대로 두면 첫 줄에서 조기 매칭된다.
+    const toml = readFileSync(tomlPath, "utf-8").replace(/\r\n/g, "\n");
+    const varsMatch = /^\[vars\]\n([\s\S]*?)(?=\n\[|(?![\s\S]))/m.exec(toml);
+    const varsSection = varsMatch?.[1] ?? "";
+
+    // [vars] 블록 안에 있는지까지 확인한다 (다른 섹션에 들어가면 값이
+    // env.IMAGE_PROXY_CONTACT로 안 읽힌다).
+    expect(varsSection).toMatch(/IMAGE_PROXY_CONTACT\s*=\s*"jsh040829@gmail\.com"/);
   });
 
   it("보내는 헤더가 셋뿐이고 Referer가 없다", () => {
