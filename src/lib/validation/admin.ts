@@ -40,7 +40,8 @@ export const setInputSchema = z
     // "필수"를 name_ko와 상호 대체 가능으로 바꾼다 — 아래 object-level .refine()이
     // "둘 중 최소 하나"를 강제한다. 🚨 한국어 라벨로 name_ja를 채우는 것은
     // 여전히 금지다(plan §4.11 ⓔ · 사용자 일감 4d).
-    // ⚠️ cards.name_ja와 달리 이 값은 §5.3 매물 크롤러의 검색 키가 아니다.
+    // ⚠️ 이 값은 세트 라벨 표기용이다. ~~§5.3 매물 크롤러의 검색 키~~ — 그
+    // 크롤러는 2026-09-03에 폐기됐다(plan §5.7).
     name_ja: optional,
     name_ko: optional,
     released_at: optionalDate,
@@ -94,7 +95,10 @@ export const cardInputSchema = z
       .transform((v) => (typeof v === "string" && v.trim().length > 0 ? v.trim() : null))
       .refine((v) => v === null || z.uuid().safeParse(v).success, "세트 선택이 올바르지 않습니다."),
     code: required("카드 코드"),
-    // name_ja는 크롤러가 일본 중고 매물을 검색하는 유일한 키다 (plan §4.4·§5.3).
+    // name_ja는 일본어 카드명이다. 한국어명이 없으면 화면 표기가 이 값이 된다
+    // (plan §4.4의 coalesce(name_ko, name_ja)). ⚠️ ~~매물 크롤러의 유일한
+    // 검색 키~~라는 옛 근거는 2026-09-03 시세 축 폐기와 함께 사라졌다
+    // (plan §5.7).
     // T1.17(2026-08-29): 유일 원천(onepiece-cardgame.kr)이 일본어명을 주지 않는
     // 것이 실측됐다(plan §4.8 ⓙ-1). "필수"는 name_ko와 상호 대체 가능으로
     // 완화한다 — 단독 필수는 유지하지 않는다. 아래 object-level .refine()이
