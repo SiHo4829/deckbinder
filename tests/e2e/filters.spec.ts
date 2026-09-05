@@ -13,6 +13,36 @@ async function login(page: Page) {
   await expect(page).toHaveURL(/\/admin$/);
 }
 
+/**
+ * `<option>`의 value는 games.code가 아니라 games.id(uuid)라 하드코딩할 수 없고,
+ * name_ko는 마이그레이션 010이 이미 한 번 바꿨듯 언제든 또 바뀔 수 있다.
+ * 대신 fetchGames()가 `order("code")`로 정렬한다는 사실(query.ts)과 games.code
+ * 포맷이 `<기본게임>[-<판>]`으로 고정된다는 사실(마이그레이션 010 주석)에 기대,
+ * 코드의 알파벳 순으로 옵션 위치를 찾아 그 option의 value(id)를 읽어 넘긴다.
+ * name_ko 문자열에는 전혀 의존하지 않는다.
+ *
+ * `src/lib/validation/card.ts`의 `GAME_CODES`는 값 집합은 같지만 선언 순서라
+ * 알파벳 순이 아니다 — 여기 순서와 다른 별개의 목록이니 게임을 추가/삭제할 때
+ * 그쪽만 보고 여기를 빠뜨리지 말 것.
+ */
+const GAME_CODE_ORDER = ["opcg-jp", "opcg-kr", "ptcg"] as const;
+
+async function selectGameByCode(page: Page, code: (typeof GAME_CODE_ORDER)[number]) {
+  const index = GAME_CODE_ORDER.indexOf(code);
+  const select = page.getByLabel("게임");
+  const options = select.locator("option");
+  // 게임이 추가/삭제되면 GAME_CODE_ORDER의 인덱스가 밀려 엉뚱한 게임을 가리키게 된다.
+  // selectOption({ value })는 어떤 값이든 유효하면 조용히 통과하므로, 그 전에
+  // 실제 option 개수와 목록 길이가 어긋나는지 여기서 시끄럽게 확인한다.
+  await expect(
+    options,
+    "games 테이블의 게임 수가 GAME_CODE_ORDER와 어긋납니다. " +
+      "게임이 추가/삭제됐다면 이 파일의 GAME_CODE_ORDER를 갱신하세요.",
+  ).toHaveCount(GAME_CODE_ORDER.length);
+  const value = await options.nth(index).getAttribute("value");
+  await select.selectOption({ value: value! });
+}
+
 // beforeAll이 만든 데이터를 모든 테스트가 공유한다.
 // 병렬로 돌리면 워커마다 beforeAll이 다시 실행되어 같은 데이터를 중복 생성한다.
 test.describe.configure({ mode: "serial" });
@@ -38,6 +68,9 @@ test.describe("도감 필터 확장", () => {
       [drawCode, `드로우${stamp}`],
       [counterCode, `카운터${stamp}`],
     ]) {
+      // 카드도 opcg-kr로 등록한다(아래). 키워드 폼 역시 기본값이 games[0](opcg-jp)라
+      // 그대로 두면 카드의 availableKeywords(game_id 일치 필터)에서 빠져 버튼이 안 뜬다.
+      await selectGameByCode(page, "opcg-kr");
       await page.getByLabel("키워드 코드").fill(code);
       await page.getByLabel("한국어 표기").fill(label);
       await page.getByRole("button", { name: "키워드 등록" }).click();
@@ -61,6 +94,9 @@ test.describe("도감 필터 확장", () => {
     ];
     for (const c of cards) {
       await page.goto("/admin/cards/new");
+      // 이 스펙의 조회는 전부 game=opcg-kr을 고정으로 쓴다(78·86·94·102·111행).
+      // CardForm의 기본값(games[0])에 기대지 않고 명시적으로 맞춘다.
+      await selectGameByCode(page, "opcg-kr");
       await page.getByLabel("카드 코드").fill(c.code);
       await page.getByLabel("일본어 카드명").fill(c.name);
       await page.getByLabel("한국어 카드명").fill(c.name);

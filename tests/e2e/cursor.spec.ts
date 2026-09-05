@@ -13,6 +13,36 @@ async function login(page: Page) {
   await expect(page).toHaveURL(/\/admin$/);
 }
 
+/**
+ * `<option>`의 value는 games.code가 아니라 games.id(uuid)라 하드코딩할 수 없고,
+ * name_ko는 마이그레이션 010이 이미 한 번 바꿨듯 언제든 또 바뀔 수 있다.
+ * 대신 fetchGames()가 `order("code")`로 정렬한다는 사실(query.ts)과 games.code
+ * 포맷이 `<기본게임>[-<판>]`으로 고정된다는 사실(마이그레이션 010 주석)에 기대,
+ * 코드의 알파벳 순으로 옵션 위치를 찾아 그 option의 value(id)를 읽어 넘긴다.
+ * name_ko 문자열에는 전혀 의존하지 않는다.
+ *
+ * `src/lib/validation/card.ts`의 `GAME_CODES`는 값 집합은 같지만 선언 순서라
+ * 알파벳 순이 아니다 — 여기 순서와 다른 별개의 목록이니 게임을 추가/삭제할 때
+ * 그쪽만 보고 여기를 빠뜨리지 말 것.
+ */
+const GAME_CODE_ORDER = ["opcg-jp", "opcg-kr", "ptcg"] as const;
+
+async function selectGameByCode(page: Page, code: (typeof GAME_CODE_ORDER)[number]) {
+  const index = GAME_CODE_ORDER.indexOf(code);
+  const select = page.getByLabel("게임");
+  const options = select.locator("option");
+  // 게임이 추가/삭제되면 GAME_CODE_ORDER의 인덱스가 밀려 엉뚱한 게임을 가리키게 된다.
+  // selectOption({ value })는 어떤 값이든 유효하면 조용히 통과하므로, 그 전에
+  // 실제 option 개수와 목록 길이가 어긋나는지 여기서 시끄럽게 확인한다.
+  await expect(
+    options,
+    "games 테이블의 게임 수가 GAME_CODE_ORDER와 어긋납니다. " +
+      "게임이 추가/삭제됐다면 이 파일의 GAME_CODE_ORDER를 갱신하세요.",
+  ).toHaveCount(GAME_CODE_ORDER.length);
+  const value = await options.nth(index).getAttribute("value");
+  await select.selectOption({ value: value! });
+}
+
 test.describe.configure({ mode: "serial" });
 
 /**
@@ -37,11 +67,12 @@ test.describe("도감 커서", () => {
     await login(page);
 
     // 같은 코드를 두 게임에 하나씩. (game_id, code) 유니크라 DB는 이를 허용한다.
-    for (const game of ["원피스 카드 게임", "포켓몬 카드 게임"]) {
+    // 어느 게임인지는 이 테스트의 관심사가 아니다 — game_id가 서로 다르기만 하면 된다.
+    for (const gameCode of ["opcg-kr", "ptcg"] as const) {
       await page.goto("/admin/cards/new");
-      await page.getByLabel("게임").selectOption({ label: game });
+      await selectGameByCode(page, gameCode);
       await page.getByLabel("카드 코드").fill(dupCode);
-      await page.getByLabel("일본어 카드명").fill(`${game}${stamp}`);
+      await page.getByLabel("일본어 카드명").fill(`${gameCode}${stamp}`);
       await page.getByLabel("레어도").fill(rarity);
       await page.getByRole("button", { name: "카드 등록" }).click();
       await expect(page.getByTestId("form-status")).toContainText("등록 완료");
