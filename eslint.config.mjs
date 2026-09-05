@@ -14,6 +14,10 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // supabase CLI 생성물. .gitignore에 있지만 flat config는 그것을 보지 않는다.
     "supabase/.temp/**",
+    // wrangler dev / opennextjs-cloudflare build 산출물. .gitignore에 있지만
+    // flat config는 그것을 보지 않는다.
+    ".wrangler/**",
+    ".open-next/**",
   ]),
   {
     // plan §3.3 규칙 2 · §4.7 ⓓ-2 — 도메인은 카드 DB · 프레임워크에 의존하지 않는다.
