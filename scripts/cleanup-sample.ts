@@ -17,6 +17,7 @@
  * | tests/e2e/admin-cards.spec.ts | 카드 `PGE######-###`(페이지네이션 — 스스로 지우지 않는다) · 키워드 `rt######kw`(수정 왕복 — 카드 자체는 스스로 지운다) |
  * | tests/e2e/admin-sets.spec.ts | 세트 `SX######` · `SY######` · 카드 `SX######-001` (모두 스스로 지운다 — 안전망으로만 등록) |
  * | tests/e2e/admin-keywords.spec.ts | 키워드 `kx######` · 카드 `KX######-001` (모두 스스로 지운다 — 안전망으로만 등록) |
+ * | tests/e2e/set-cards.spec.ts | 세트 `ST######` · 카드 `ST######-###`(61장) — 스스로 지우지 않는다 |
  */
 async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -60,6 +61,7 @@ async function main() {
   await delMatch("cards", "code", `^PGE${STAMP}-`);
   await delMatch("cards", "code", `^SX${STAMP}-`);
   await delMatch("cards", "code", `^KX${STAMP}-`);
+  await delMatch("cards", "code", `^ST${STAMP}-`);
 
   console.log("키워드");
   await delMatch("keywords", "code", `^smpl`);
@@ -70,6 +72,7 @@ async function main() {
   console.log("세트");
   await delMatch("card_sets", "code", `^SMPL`);
   await delMatch("card_sets", "code", `^(E2E|D|F|SX|SY)${STAMP}$`);
+  await delMatch("card_sets", "code", `^ST${STAMP}$`);
 
   console.log("--- 남은 행 ---");
   for (const t of ["card_sets", "cards", "keywords", "card_keywords", "news_posts"]) {
