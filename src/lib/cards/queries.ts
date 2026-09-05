@@ -79,6 +79,88 @@ export async function fetchCardAlternatives(
   return (data ?? []).map((row) => withProxiedImage(row, clientEnv.NEXT_PUBLIC_IMAGE_PROXY_BASE) as CardListItem);
 }
 
+/** `/sets/[setId]` 전체 보기의 페이지당 장수 (plan §4.9 ⓓ — 여기서 고치지 않는다). */
+export const SET_CARDS_PAGE_SIZE = 60;
+
+export interface SetMeta {
+  id: string;
+  code: string;
+  name_ko: string | null;
+  name_ja: string | null;
+  game: { code: string; name_ko: string } | null;
+}
+
+/**
+ * 세트 메타(코드 · 라벨 · 게임) 조회. `/sets/[setId]`가 존재 확인에도 쓴다 —
+ * 없으면 `null`이고 호출부가 `notFound()`를 던진다(plan §4.9 ⓑ).
+ */
+export async function fetchSetMeta(setId: string): Promise<SetMeta | null> {
+  const supabase = createSupabaseAnonClient();
+
+  const { data, error } = await supabase
+    .from("card_sets")
+    .select("id,code,name_ko,name_ja,games(code,name_ko)")
+    .eq("id", setId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  return {
+    id: data.id,
+    code: data.code,
+    name_ko: data.name_ko,
+    name_ja: data.name_ja,
+    game: data.games ? { code: data.games.code, name_ko: data.games.name_ko } : null,
+  };
+}
+
+/**
+ * 세트 총 카드 수. `fetchPrintingFacts`(:108)와 정확히 같은 모양의 count다 —
+ * 같은 세트에 대해 이미 도는 부하이지 새로 생기는 부하가 아니다(plan §4.9 ⓖ-ⓑ).
+ */
+export async function fetchSetCardCount(setId: string): Promise<number> {
+  const supabase = createSupabaseAnonClient();
+
+  const { count } = await supabase
+    .from("cards")
+    .select("id", { count: "exact", head: true })
+    .eq("set_id", setId);
+
+  return count ?? 0;
+}
+
+/**
+ * 세트 카드 한 페이지. `code` 오름차순 고정(정렬 옵션을 넣지 않는다 — ⓘ) ·
+ * 오프셋 `range()`(커서를 쓰지 않는다 — ⓒ). `code`는 `(game_id, code)`
+ * unique 제약(마이그레이션 001)과 세트가 한 게임에 속한다는 FK로 세트
+ * 안에서 유일해 타이브레이커가 필요 없다(§4.9 ⓖ 재료).
+ *
+ * `pageSize`는 기본값 60(§4.9 ⓓ)이지만, 카드 상세의 미리보기 12장
+ * (`SetCardsPreview`)도 이 함수를 그대로 쓴다 — `page=1, pageSize=12`로
+ * 부르면 같은 정렬 위에서 앞 12장만 가져온다. 새 쿼리 모양을 만들지 않는다.
+ */
+export async function fetchSetCards(
+  setId: string,
+  page: number,
+  pageSize: number = SET_CARDS_PAGE_SIZE,
+): Promise<CardListItem[]> {
+  const supabase = createSupabaseAnonClient();
+  const currentPage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+  const from = (currentPage - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  const { data } = await supabase
+    .from("cards")
+    .select(
+      "id,code,name_ko,name_ja,rarity,attribute,card_type,sub_type,image_url,source_image_url,set_id",
+    )
+    .eq("set_id", setId)
+    .order("code")
+    .range(from, to);
+
+  return (data ?? []).map((row) => withProxiedImage(row, clientEnv.NEXT_PUBLIC_IMAGE_PROXY_BASE) as CardListItem);
+}
+
 /**
  * 희귀도 점수(T2.15)의 번역 입력을 만든다. 번역 자체는 순수 함수
  * `toPrintingFacts`(`src/lib/cards/printing-facts.ts`)가 하고, 여기는 DB

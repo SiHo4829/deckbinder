@@ -4,8 +4,15 @@ import { notFound } from "next/navigation";
 
 import { CardImage } from "@/components/features/cards/card-image";
 import { RarityScoreBadge } from "@/components/features/cards/rarity-score-badge";
+import { SetCardsPreview } from "@/components/features/cards/set-cards-preview";
 import { SimilarCards } from "@/components/features/cards/similar-cards";
-import { fetchCardAlternatives, fetchCardDetail, fetchPrintingFacts } from "@/lib/cards/queries";
+import {
+  fetchCardAlternatives,
+  fetchCardDetail,
+  fetchPrintingFacts,
+  fetchSetCardCount,
+  fetchSetCards,
+} from "@/lib/cards/queries";
 import { rarityScore } from "@/lib/domain/achievement/rarity-score";
 import { cardDisplayName } from "@/types/card";
 
@@ -59,6 +66,12 @@ export default async function CardDetailPage(props: PageProps<"/cards/[cardId]">
     printingsInGroup: alternatives.length + 1,
   });
   const rarity = rarityScore(printingFacts);
+
+  // 같은 세트의 카드(§4.9) — set_id가 없으면 조회하지 않는다. SetCardsPreview가
+  // cards.length === 0에서 섹션 자체를 접는다.
+  const [setTotalCount, setPreviewCards] = card.set_id
+    ? await Promise.all([fetchSetCardCount(card.set_id), fetchSetCards(card.set_id, 1, 12)])
+    : [0, []];
 
   return (
     <div className="flex flex-col gap-8 py-2">
@@ -137,6 +150,16 @@ export default async function CardDetailPage(props: PageProps<"/cards/[cardId]">
           <SimilarCards cards={alternatives} />
         </div>
       </div>
+
+      {card.set && card.set_id ? (
+        <SetCardsPreview
+          setId={card.set_id}
+          setLabel={`${card.set.code} · ${card.set.label}`}
+          totalCount={setTotalCount}
+          cards={setPreviewCards}
+          currentCardId={card.id}
+        />
+      ) : null}
     </div>
   );
 }
