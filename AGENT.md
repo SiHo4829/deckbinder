@@ -49,7 +49,7 @@
 | 2. Design | Designer | UI 컴포넌트 및 레이아웃 구조 | 시각적 컨셉 · 레이아웃 확정 (UI 없는 태스크는 건너뜀) |
 | 3. Implementation | Developer | 실패 테스트 → 통과 코드 | 해당 태스크의 테스트가 red → green |
 | 4. Review | Reviewer | 리뷰 코멘트 | 컨벤션 · 보안 · 디자인 통일성 위반 0건 |
-| 5. Verification | Reviewer | 실행 로그 | `npm run lint` · `npm run typecheck` · `npm run test` · `npm run test:e2e` 통과 |
+| 5. Verification | Reviewer | 실행 로그 | `npm run lint` · `npm run typecheck` · `npm run build` · `npm run test` · `npm run test:e2e` 통과 |
 | 6. Commit | 사람 | 커밋 | `git diff` 육안 확인 후 사람이 직접 커밋 |
 
 > 🚨 **5단계의 판정 기준은 「빨간불 0건인가」가 아니라 「기준선과 같은가」입니다.** 현재 E2E 기준선은 **49건 중 41 통과 · 2 실패 · 6 미실행**입니다 (`plan.md` §5.1). **착수 전에도 이 넷을 돌아 기준선을 확인합니다.**
