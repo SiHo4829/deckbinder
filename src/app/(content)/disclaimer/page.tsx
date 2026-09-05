@@ -74,6 +74,13 @@ export default function DisclaimerPage() {
         </p>
       </Section>
 
+      <Section title="운영과 수익">
+        <p>
+          덱바인더는 <strong>광고 · 제휴 링크 · 후원 · 유료 기능을 두지
+          않습니다.</strong> 운영 비용은 만든 사람이 부담합니다.
+        </p>
+      </Section>
+
       <Section title="정보의 정확성">
         <p>
           카드 정보와 수집 점수는 오류를 포함할 수 있으며, 예고 없이 변경되거나
