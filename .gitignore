@@ -25,6 +25,9 @@ blob-report/
 .wrangler/
 .dev.vars
 
+# opennext (앱 워커 빌드 산출물, T4.0). 공개 저장소라 커밋은 곧 재배포다.
+.open-next/
+
 # supabase
 supabase/.branches/
 supabase/.temp/
