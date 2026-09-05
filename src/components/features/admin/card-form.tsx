@@ -38,7 +38,7 @@ const TEXT_FIELDS = [
   {
     key: "name_ja",
     label: "일본어 카드명",
-    hint: "일본 중고 매물 검색에 쓰이는 키입니다.",
+    hint: "한국어명이 없으면 화면에 이 이름이 나옵니다.",
     required: true,
   },
   { key: "name_ko", label: "한국어 카드명", hint: "없으면 일본어명으로 표시됩니다." },

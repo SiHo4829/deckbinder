@@ -102,7 +102,7 @@ async function main() {
     {
       slug: "smpl-guide",
       title: "처음 시작하는 분을 위한 카드 구매 가이드",
-      summary: "합리적인 가격에 카드를 모으는 방법을 안내합니다.",
+      summary: "스타터 덱으로 시작하는 방법을 안내합니다.",
       content_md: "## 시작하기\n\n스타터 덱부터 시작하는 것을 권합니다.",
       published_at: new Date(Date.now() - 259200000).toISOString(),
       author_name: "덱바인더 편집부",

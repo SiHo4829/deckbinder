@@ -14,7 +14,7 @@ export default function BinderPage() {
       icon={BookMarked}
       eyebrow="곧 공개"
       title="내 바인더"
-      description="소장 카드와 위시리스트를 가상 3공 바인더에 정리하고, 컬렉션 총 가치를 한눈에 확인할 수 있게 준비하고 있습니다."
+      description="소장 카드와 위시리스트를 가상 3공 바인더에 정리하고, 자체 수집 점수로 모은 것을 확인할 수 있게 준비하고 있습니다."
       features={[
         {
           title: "가상 3공 바인더",
@@ -22,7 +22,7 @@ export default function BinderPage() {
         },
         {
           title: "위시리스트",
-          body: "노리는 카드를 담아 두고 매물이 나오면 바로 확인합니다.",
+          body: "노리는 카드를 담아 두고 모으는 진행 상황을 확인합니다.",
         },
         {
           title: "공유 링크",
