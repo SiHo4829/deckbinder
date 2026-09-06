@@ -49,8 +49,9 @@ export function Footer() {
 
         <div className="mt-10 border-t pt-6">
           <p className="text-xs leading-relaxed text-muted-foreground">
-            공식 포켓몬 · 원피스 TCG 유통사와 무관한 팬 메이드 서포팅 툴입니다. 표시되는
-            수집 점수는 자체 산출값이며 금전적 가치를 뜻하지 않습니다.{" "}
+            포켓몬 · 원피스 TCG의 권리자 및 공식 유통사와 무관한 팬 메이드
+            서포팅 툴입니다. 표시되는 수집 점수는 자체 산출값이며 금전적 가치를
+            뜻하지 않습니다.{" "}
             <Link href="/disclaimer" className="underline underline-offset-2">
               자세히
             </Link>
